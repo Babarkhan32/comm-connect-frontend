@@ -41,13 +41,16 @@ export type Broadcast = {
 
 export type ChatRoom = {
     _id: string;
-    broadcastId?: Broadcast;
-    participantIds: User[] | string[];
-    lastMessageAt?: string;
+    broadcastId?: {
+        _id: string;
+        title?: string;
+    } | string;
+    participantIds: string[];
     messageCount: number;
     unreadCount?: number;
+    lastMessageAt?: string;
+    disabled?: boolean;
 };
-
 export type ChatMessage = {
     _id: string;
     senderId: string;

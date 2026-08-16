@@ -37,8 +37,9 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
                 : { email: formData.get("email"), password: formData.get("password") };
             const response = await api<AuthResponse>(isSignup ? "/users" : "/auth/login", { method: "POST", body: JSON.stringify(body) });
             if (isSignup) {
-                showToast("Account created. Check your email for the verification code.", "success");
-                router.push(`/verify-email?email=${encodeURIComponent(String(formData.get("email")))}`);
+                showToast("Account created. Kindly login", "success");
+                //  router.push(`/verify-email?email=${encodeURIComponent(String(formData.get("email")))}`);
+                router.push('/login')
                 return;
             }
             saveSession(response);

@@ -1,0 +1,28 @@
+"use client";
+
+import Link from "next/link";
+import { useEffect, useState } from "react";
+import { Check, MapPin, Plus, X } from "lucide-react";
+import { api, getList } from "@/lib/api";
+import type { Broadcast, Interest } from "@/lib/types";
+import { Button, EmptyState, Field } from "./ui";
+
+export function BroadcastList() {
+    const [broadcasts, setBroadcasts] = useState<Broadcast[] | null>(null);
+    const [error, setError] = useState("");
+    useEffect(() => { getList<Broadcast>("/broadcasts/me/received?limit=30").then((result) => setBroadcasts(result.data)).catch((reason: Error) => { setError(reason.message); setBroadcasts([]); }); }, []);
+    async function respond(id: string, response: "accept" | "pass") { try { await api(`/broadcasts/${id}/${response}`, { method: "PATCH" }); setBroadcasts((current) => current?.filter((item) => item._id !== id) ?? []); } catch (reason) { setError(reason instanceof Error ? reason.message : "Could not respond to invitation."); } }
+    if (broadcasts === null) return <div className="h-80 animate-pulse bg-surface-muted" />;
+    return <div>{error && <p role="alert" className="mb-4 text-sm text-danger">{error}</p>}{broadcasts.length ? <div className="grid gap-4">{broadcasts.map((broadcast) => <article key={broadcast._id} className="border border-border bg-surface p-5"><div className="flex flex-wrap items-start justify-between gap-4"><div><div className="mb-3 inline-flex items-center gap-1.5 text-sm text-ink-muted"><MapPin className="size-4 text-accent" />{broadcast.postalCode}, {broadcast.state}</div><h2 className="max-w-2xl text-lg font-semibold text-ink">{broadcast.message}</h2><p className="mt-2 text-sm text-ink-muted">{new Date(broadcast.eventDate).toLocaleString()} · {broadcast.participantCount}/{broadcast.maxParticipants} people</p></div><span className="border border-border px-2.5 py-1 text-xs font-semibold text-ink-muted">{broadcast.status}</span></div><div className="mt-5 flex gap-3"><Button onClick={() => respond(broadcast._id, "accept")}><Check className="size-4" />Join</Button><button onClick={() => respond(broadcast._id, "pass")} className="inline-flex h-11 items-center gap-2 px-3 text-sm font-semibold text-ink-muted hover:text-danger"><X className="size-4" />Pass</button></div></article>)}</div> : <EmptyState icon={<MapPin className="size-5" />} title="No invitations right now">Choose a few more interests or check back later for plans in your area.</EmptyState>}</div>;
+}
+
+export function BroadcastForm() {
+    const [interests, setInterests] = useState<Interest[]>([]);
+    const [selected, setSelected] = useState<string[]>([]);
+    const [message, setMessage] = useState("");
+    const [error, setError] = useState("");
+    const [saving, setSaving] = useState(false);
+    useEffect(() => { getList<Interest>("/interests?limit=100").then((result) => setInterests(result.data)).catch((reason: Error) => setError(reason.message)); }, []);
+    async function submit(formData: FormData) { setError(""); setSaving(true); try { await api("/broadcasts", { method: "POST", body: JSON.stringify({ message, interestIds: selected, state: formData.get("state"), postalCode: formData.get("postalCode"), location: { lng: Number(formData.get("longitude")), lat: Number(formData.get("latitude")) }, radiusKm: Number(formData.get("radiusKm")), eventDate: new Date(String(formData.get("eventDate"))).toISOString(), maxParticipants: Number(formData.get("maxParticipants")) }) }); window.location.assign("/broadcasts"); } catch (reason) { setError(reason instanceof Error ? reason.message : "Could not create your broadcast."); } finally { setSaving(false); } }
+    return <form action={submit} className="grid max-w-3xl gap-6"><section className="grid gap-4 border border-border bg-surface p-5"><label className="grid gap-1.5 text-sm font-medium text-ink">What are you planning?<textarea value={message} onChange={(event) => setMessage(event.target.value)} required maxLength={1000} rows={4} className="resize-y border border-border bg-surface px-3 py-2.5 outline-none focus:border-accent" placeholder="A clear, friendly invitation works best." /></label><div><p className="mb-2 text-sm font-medium text-ink">Who is it for?</p><div className="flex flex-wrap gap-2">{interests.map((interest) => <button key={interest._id} type="button" onClick={() => setSelected((current) => current.includes(interest._id) ? current.filter((id) => id !== interest._id) : [...current, interest._id])} className={`border px-3 py-2 text-sm font-medium ${selected.includes(interest._id) ? "border-accent bg-accent-subtle text-accent" : "border-border text-ink-muted hover:border-accent"}`}>{interest.name}</button>)}</div></div></section><section className="grid gap-4 border border-border bg-surface p-5 sm:grid-cols-2"><Field label="Date and time" name="eventDate" type="datetime-local" required /><Field label="Maximum participants" name="maxParticipants" type="number" min="1" max="100" defaultValue="6" required /><Field label="Postal code" name="postalCode" required /><Field label="State" name="state" placeholder="e.g. Berlin" required /><Field label="Longitude" name="longitude" type="number" step="any" required /><Field label="Latitude" name="latitude" type="number" step="any" required /><Field label="Reach (km)" name="radiusKm" type="number" min="1" max="100" defaultValue="10" required /></section>{error && <p role="alert" className="text-sm text-danger">{error}</p>}<div className="flex gap-3"><Button loading={saving} disabled={!selected.length || !message.trim()} type="submit"><Plus className="size-4" />Publish broadcast</Button><Link href="/broadcasts" className="inline-flex h-11 items-center px-3 text-sm font-semibold text-ink-muted">Cancel</Link></div></form>;
+}

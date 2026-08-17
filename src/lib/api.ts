@@ -66,6 +66,6 @@ export async function getList<T>(path: string) {
         total: typeof response?.total === "number" ? response.total : data.length,
         page: typeof response?.page === "number" ? response.page : 1,
         limit,
-        pages: typeof response?.pages === "number" ? response.pages : (data.length ? 1 : 0),
+        pages: typeof response?.pages === "number" ? response.pages : typeof (response as { totalPages?: number })?.totalPages === "number" ? (response as { totalPages: number }).totalPages : (data.length ? 1 : 0),
     } satisfies Paginated<T>;
 }

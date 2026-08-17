@@ -1,4 +1,5 @@
 "use client";
+"use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { io, type Socket } from "socket.io-client";
@@ -60,16 +61,18 @@ export function ChatWorkspace() {
     const userId = getSession()?.user?._id;
 
     const socketRef = useRef<Socket | null>(null);
+    const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
     const [rooms, setRooms] = useState<ChatRoom[]>([]);
-    const [activeRoom, setActiveRoom] =
-        useState<ChatRoom | null>(null);
-
-    const [messages, setMessages] =
-        useState<ChatMessage[]>([]);
-
+    const [activeRoom, setActiveRoom] = useState<ChatRoom | null>(null);
+    const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [draft, setDraft] = useState("");
     const [error, setError] = useState("");
+
+    // Typing users currently typing in the active room
+    const [typingUsers, setTypingUsers] = useState<
+        { userId: string; name: string }[]
+    >([]);
 
     /* ========================================================
        LOAD ROOMS
@@ -79,10 +82,7 @@ export function ChatWorkspace() {
         getList<ChatRoom>("/chat/me/rooms?limit=50")
             .then((result) => {
                 setRooms(result.data);
-
-                setActiveRoom(
-                    result.data[0] ?? null
-                );
+                setActiveRoom(result.data[0] ?? null);
             })
             .catch((reason: Error) => {
                 setError(reason.message);
@@ -95,17 +95,14 @@ export function ChatWorkspace() {
 
     useEffect(() => {
         function onUnread(event: Event) {
-            const detail =
-                (
-                    event as CustomEvent<{
-                        roomId: string;
-                        timestamp?: string;
-                    }>
-                ).detail;
+            const detail = (
+                event as CustomEvent<{
+                    roomId: string;
+                    timestamp?: string;
+                }>
+            ).detail;
 
-            if (!detail?.roomId) {
-                return;
-            }
+            if (!detail?.roomId) return;
 
             setRooms((current) =>
                 current.map((room) =>
@@ -113,28 +110,19 @@ export function ChatWorkspace() {
                         ? {
                             ...room,
                             unreadCount:
-                                Number(
-                                    room.unreadCount ?? 0
-                                ) + 1,
+                                Number(room.unreadCount ?? 0) + 1,
                             lastMessageAt:
-                                detail.timestamp ??
-                                room.lastMessageAt,
+                                detail.timestamp ?? room.lastMessageAt,
                         }
                         : room
                 )
             );
         }
 
-        window.addEventListener(
-            "comm-connect:chat-unread",
-            onUnread
-        );
+        window.addEventListener("comm-connect:chat-unread", onUnread);
 
         return () =>
-            window.removeEventListener(
-                "comm-connect:chat-unread",
-                onUnread
-            );
+            window.removeEventListener("comm-connect:chat-unread", onUnread);
     }, []);
 
     /* ========================================================
@@ -142,15 +130,13 @@ export function ChatWorkspace() {
        ======================================================== */
 
     useEffect(() => {
-        if (!activeRoom || !userId) {
-            return;
-        }
+        if (!activeRoom || !userId) return;
+
+        // Reset typing when switching rooms
+        setTypingUsers([]);
 
         /*
          * Always load existing messages.
-         *
-         * Even when a room is disabled, users should still
-         * be able to read the previous conversation.
          */
         getList<ChatMessage>(
             `/chat/rooms/${activeRoom._id}/messages?limit=100`
@@ -163,78 +149,47 @@ export function ChatWorkspace() {
             });
 
         /*
-         * If the room is disabled:
-         *
-         * - Don't join the Socket.IO room.
-         * - Don't establish a chat socket.
-         * - Don't mark messages as read through the chat flow.
-         *
-         * Existing messages remain visible.
+         * Disabled room → no socket
          */
         if (activeRoom.disabled) {
             socketRef.current?.disconnect();
             socketRef.current = null;
-
             return;
         }
 
         /*
-         * Active room:
-         * mark messages as read.
+         * Mark as read
          */
-        api(
-            `/chat/rooms/${activeRoom._id}/read`,
-            {
-                method: "PATCH",
-            }
-        )
+        api(`/chat/rooms/${activeRoom._id}/read`, {
+            method: "PATCH",
+        })
             .then(() => {
                 setRooms((current) =>
                     current.map((room) =>
                         room._id === activeRoom._id
-                            ? {
-                                ...room,
-                                unreadCount: 0,
-                            }
+                            ? { ...room, unreadCount: 0 }
                             : room
                     )
                 );
 
-                window.dispatchEvent(
-                    new Event(
-                        "comm-connect:chat-read"
-                    )
-                );
+                window.dispatchEvent(new Event("comm-connect:chat-read"));
             })
-            .catch(() => {
-                /*
-                 * Don't prevent the chat itself from loading
-                 * if marking as read fails.
-                 */
-            });
+            .catch(() => undefined);
 
         /* ====================================================
            SOCKET CONNECTION
            ==================================================== */
 
-        const socket = io(
-            `${SOCKET_URL}/ws`,
-            {
-                query: {
-                    userId,
-                },
-            }
-        );
+        const socket = io(`${SOCKET_URL}/ws`, {
+            query: { userId },
+        });
 
         socketRef.current = socket;
 
-        socket.emit(
-            "chat:join_room",
-            {
-                roomId: activeRoom._id,
-                userId,
-            }
-        );
+        socket.emit("chat:join_room", {
+            roomId: activeRoom._id,
+            userId,
+        });
 
         /* ====================================================
            NEW MESSAGE
@@ -242,74 +197,48 @@ export function ChatWorkspace() {
 
         socket.on(
             "chat:new_message",
-            (
-                message: {
-                    messageId: string;
-                    roomId: string;
-                    senderId: string;
-                    content: string;
-                    timestamp: string;
-                }
-            ) => {
-                /*
-                 * Ignore messages belonging to another room.
-                 */
-                if (
-                    message.roomId !==
-                    activeRoom._id
-                ) {
-                    return;
-                }
+            (message: {
+                messageId: string;
+                roomId: string;
+                senderId: string;
+                content: string;
+                timestamp: string;
+            }) => {
+                if (message.roomId !== activeRoom._id) return;
 
                 setMessages((current) => [
                     ...current,
                     {
                         _id: message.messageId,
-                        senderId:
-                            message.senderId,
-                        content:
-                            message.content,
-                        createdAt:
-                            message.timestamp,
+                        senderId: message.senderId,
+                        content: message.content,
+                        createdAt: message.timestamp,
                     },
                 ]);
 
-                /*
-                 * Update last message time.
-                 */
                 setRooms((current) =>
                     current.map((room) =>
-                        room._id ===
-                            message.roomId
+                        room._id === message.roomId
                             ? {
                                 ...room,
-                                lastMessageAt:
-                                    message.timestamp,
+                                lastMessageAt: message.timestamp,
                             }
                             : room
                     )
                 );
 
-                /*
-                 * If the message was sent by someone else,
-                 * mark the room as read because it is currently
-                 * open.
-                 */
-                if (
-                    message.senderId !==
-                    userId
-                ) {
-                    api(
-                        `/chat/rooms/${activeRoom._id}/read`,
-                        {
-                            method: "PATCH",
-                        }
-                    )
+                // Also clear typing for the sender (extra safety)
+                setTypingUsers((prev) =>
+                    prev.filter((u) => u.userId !== message.senderId)
+                );
+
+                if (message.senderId !== userId) {
+                    api(`/chat/rooms/${activeRoom._id}/read`, {
+                        method: "PATCH",
+                    })
                         .then(() => {
                             window.dispatchEvent(
-                                new Event(
-                                    "comm-connect:chat-read"
-                                )
+                                new Event("comm-connect:chat-read")
                             );
                         })
                         .catch(() => undefined);
@@ -318,60 +247,125 @@ export function ChatWorkspace() {
         );
 
         /* ====================================================
+           TYPING INDICATOR
+           ==================================================== */
+
+        /* ====================================================
+            TYPING INDICATOR   ← REPLACE YOUR CURRENT ONE WITH THIS
+            ==================================================== */
+
+        socket.on(
+            "chat:user_typing",
+            (data: {
+                roomId: string;
+                userId: string;
+                name: string;
+                isTyping: boolean;
+            }) => {
+                console.log("%c===== TYPING EVENT =====", "color: lime; font-weight: bold");
+                console.log("Received data:", data);
+                console.log("My activeRoom._id:", activeRoom?._id);
+                console.log("My userId:", userId);
+                console.log(
+                    "Will ignore?",
+                    data.roomId !== activeRoom?._id || data.userId === userId
+                );
+
+                if (
+                    data.roomId !== activeRoom?._id ||
+                    data.userId === userId
+                ) {
+                    return;
+                }
+
+                setTypingUsers((prev) => {
+                    if (data.isTyping) {
+                        if (prev.some((u) => u.userId === data.userId)) {
+                            return prev;
+                        }
+                        return [
+                            ...prev,
+                            { userId: data.userId, name: data.name },
+                        ];
+                    }
+                    return prev.filter((u) => u.userId !== data.userId);
+                });
+            }
+        );
+
+        /* ====================================================
            SOCKET ERROR
            ==================================================== */
 
-        socket.on(
-            "error",
-            (
-                socketError: {
-                    message: string;
-                }
-            ) => {
-                setError(
-                    socketError.message
-                );
-            }
-        );
+        socket.on("error", (socketError: { message: string }) => {
+            setError(socketError.message);
+        });
 
         /* ====================================================
            CLEANUP
            ==================================================== */
 
         return () => {
-            socket.emit(
-                "chat:leave_room",
-                {
-                    roomId:
-                        activeRoom._id,
-                    userId,
-                }
-            );
+            // Clear any pending typing timeout
+            if (typingTimeoutRef.current) {
+                clearTimeout(typingTimeoutRef.current);
+            }
+
+            socket.emit("chat:leave_room", {
+                roomId: activeRoom._id,
+                userId,
+            });
 
             socket.disconnect();
-
             socketRef.current = null;
+            setTypingUsers([]);
         };
     }, [activeRoom, userId]);
+
+    /* ========================================================
+       TYPING HELPERS
+       ======================================================== */
+
+    function emitTyping(isTyping: boolean) {
+        if (
+            !socketRef.current ||
+            !activeRoom ||
+            activeRoom.disabled ||
+            !userId
+        ) {
+            return;
+        }
+
+        socketRef.current.emit("chat:typing", {
+            roomId: activeRoom._id,
+            userId,
+            isTyping,
+        });
+    }
+
+    function handleDraftChange(value: string) {
+        setDraft(value);
+
+        // Tell others we are typing
+        emitTyping(true);
+
+        // Reset the "stop typing" timer
+        if (typingTimeoutRef.current) {
+            clearTimeout(typingTimeoutRef.current);
+        }
+
+        typingTimeoutRef.current = setTimeout(() => {
+            emitTyping(false);
+        }, 1500); // 1.5 seconds of inactivity
+    }
 
     /* ========================================================
        SEND MESSAGE
        ======================================================== */
 
-    function send(
-        event: FormEvent<HTMLFormElement>
-    ) {
+    function send(event: FormEvent<HTMLFormElement>) {
         event.preventDefault();
 
-        /*
-         * Important:
-         *
-         * Don't allow sending when:
-         * - no room selected
-         * - room is disabled
-         * - no user
-         * - empty message
-         */
         if (
             !activeRoom ||
             activeRoom.disabled ||
@@ -381,16 +375,17 @@ export function ChatWorkspace() {
             return;
         }
 
-        socketRef.current?.emit(
-            "chat:send_message",
-            {
-                roomId:
-                    activeRoom._id,
-                userId,
-                content:
-                    draft.trim(),
-            }
-        );
+        // Stop typing immediately when sending
+        if (typingTimeoutRef.current) {
+            clearTimeout(typingTimeoutRef.current);
+        }
+        emitTyping(false);
+
+        socketRef.current?.emit("chat:send_message", {
+            roomId: activeRoom._id,
+            userId,
+            content: draft.trim(),
+        });
 
         setDraft("");
     }
@@ -399,19 +394,13 @@ export function ChatWorkspace() {
        EMPTY STATE
        ======================================================== */
 
-    if (
-        !rooms.length &&
-        !error
-    ) {
+    if (!rooms.length && !error) {
         return (
             <EmptyState
-                icon={
-                    <MessageCircle className="size-5" />
-                }
+                icon={<MessageCircle className="size-5" />}
                 title="No conversations yet"
             >
-                Accept a broadcast invitation to join
-                its group chat.
+                Accept a broadcast invitation to join its group chat.
             </EmptyState>
         );
     }
@@ -422,13 +411,11 @@ export function ChatWorkspace() {
 
     return (
         <div className="grid min-h-[32rem] overflow-hidden rounded-lg border border-border bg-surface shadow-sm md:grid-cols-[17rem_1fr]">
-
             {/* ==================================================
                 ROOM LIST
             ================================================== */}
 
             <aside className="border-b border-border md:border-r md:border-b-0">
-
                 <div className="border-b border-border px-4 py-3 text-sm font-semibold text-ink">
                     Conversations
                 </div>
@@ -436,17 +423,13 @@ export function ChatWorkspace() {
                 {rooms.map((room) => (
                     <button
                         key={room._id}
-                        onClick={() =>
-                            setActiveRoom(room)
-                        }
-                        className={`block w-full border-b border-border px-4 py-3 text-left transition-colors ${activeRoom?._id ===
-                                room._id
-                                ? "bg-accent-subtle text-accent"
-                                : "text-ink hover:bg-surface-muted"
+                        onClick={() => setActiveRoom(room)}
+                        className={`block w-full border-b border-border px-4 py-3 text-left transition-colors ${activeRoom?._id === room._id
+                            ? "bg-accent-subtle text-accent"
+                            : "text-ink hover:bg-surface-muted"
                             }`}
                     >
                         <span className="flex items-start justify-between gap-2">
-
                             <strong className="min-w-0 truncate text-sm">
                                 {roomTitle(room)}
                             </strong>
@@ -458,11 +441,9 @@ export function ChatWorkspace() {
                             )}
 
                             {!room.disabled &&
-                                (room.unreadCount ?? 0) >
-                                0 && (
+                                (room.unreadCount ?? 0) > 0 && (
                                     <span className="grid min-w-5 place-items-center rounded-full bg-accent px-1 text-xs font-semibold text-surface">
-                                        {room.unreadCount! >
-                                            99
+                                        {room.unreadCount! > 99
                                             ? "99+"
                                             : room.unreadCount}
                                     </span>
@@ -474,9 +455,7 @@ export function ChatWorkspace() {
                         </span>
 
                         <span className="mt-1 block text-xs text-ink-muted">
-                            {relativeMessageTime(
-                                room.lastMessageAt
-                            )}
+                            {relativeMessageTime(room.lastMessageAt)}
                         </span>
                     </button>
                 ))}
@@ -487,29 +466,22 @@ export function ChatWorkspace() {
             ================================================== */}
 
             <section className="flex min-h-[24rem] flex-col">
-
                 {/* ==================================================
                     HEADER
                 ================================================== */}
 
                 <div className="border-b border-border px-5 py-3">
-
                     <div className="flex items-center justify-between gap-3">
-
                         <div className="min-w-0">
                             <strong className="block truncate text-sm text-ink">
                                 {activeRoom
-                                    ? roomTitle(
-                                        activeRoom
-                                    )
+                                    ? roomTitle(activeRoom)
                                     : "Select a conversation"}
                             </strong>
 
                             {activeRoom && (
                                 <span className="mt-1 block truncate text-xs text-ink-muted">
-                                    {roomParticipants(
-                                        activeRoom
-                                    )}
+                                    {roomParticipants(activeRoom)}
                                 </span>
                             )}
                         </div>
@@ -519,7 +491,6 @@ export function ChatWorkspace() {
                                 Expired
                             </span>
                         )}
-
                     </div>
                 </div>
 
@@ -528,62 +499,53 @@ export function ChatWorkspace() {
                 ================================================== */}
 
                 <div className="flex-1 space-y-3 overflow-y-auto p-5">
+                    {messages.length === 0 && activeRoom && (
+                        <div className="flex h-full items-center justify-center text-sm text-ink-muted">
+                            No messages yet.
+                        </div>
+                    )}
 
-                    {messages.length === 0 &&
-                        activeRoom && (
-                            <div className="flex h-full items-center justify-center text-sm text-ink-muted">
-                                No messages yet.
-                            </div>
-                        )}
-
-                    {messages.map(
-                        (message) => (
+                    {messages.map((message) => (
+                        <div
+                            key={message._id}
+                            className={`max-w-[80%] ${message.senderId === userId ? "ml-auto" : ""
+                                }`}
+                        >
                             <div
-                                key={
-                                    message._id
-                                }
-                                className={`max-w-[80%] ${message.senderId ===
-                                        userId
-                                        ? "ml-auto"
-                                        : ""
+                                className={`rounded-md px-3 py-2 text-sm leading-6 ${message.senderId === userId
+                                    ? "bg-accent text-surface"
+                                    : "bg-surface-muted text-ink"
                                     }`}
                             >
-                                <div
-                                    className={`rounded-md px-3 py-2 text-sm leading-6 ${message.senderId ===
-                                            userId
-                                            ? "bg-accent text-surface"
-                                            : "bg-surface-muted text-ink"
-                                        }`}
-                                >
-                                    {
-                                        message.content
-                                    }
-                                </div>
-
-                                <p className="mt-1 text-xs text-ink-muted">
-                                    {new Date(
-                                        message.createdAt
-                                    ).toLocaleTimeString(
-                                        [],
-                                        {
-                                            hour: "numeric",
-                                            minute: "2-digit",
-                                        }
-                                    )}
-                                </p>
+                                {message.content}
                             </div>
-                        )
+
+                            <p className="mt-1 text-xs text-ink-muted">
+                                {new Date(message.createdAt).toLocaleTimeString(
+                                    [],
+                                    {
+                                        hour: "numeric",
+                                        minute: "2-digit",
+                                    }
+                                )}
+                            </p>
+                        </div>
+                    ))}
+
+                    {/* ========== TYPING INDICATOR ========== */}
+                    {typingUsers.length > 0 && (
+                        <div className="px-1 text-sm italic text-ink-muted">
+                            {typingUsers.map((u) => u.name).join(", ")}{" "}
+                            {typingUsers.length === 1 ? "is" : "are"} typing
+                            <span className="animate-pulse">...</span>
+                        </div>
                     )}
 
                     {error && (
-                        <p
-                            role="alert"
-                            className="text-sm text-danger"
-                        >
+                        <p role="alert" className="text-sm text-danger">
                             {error}
                         </p>
                     )}
-
                 </div>
 
                 {/* ==================================================
@@ -592,21 +554,15 @@ export function ChatWorkspace() {
 
                 {activeRoom?.disabled ? (
                     <div className="border-t border-border bg-surface-muted px-4 py-4 text-center">
-
                         <p className="text-sm font-medium text-ink">
                             This chat has expired
                         </p>
-
                         <p className="mt-1 text-xs text-ink-muted">
-                            This broadcast has ended.
-                            You can still view the
-                            previous messages, but no
-                            new messages can be sent.
+                            This broadcast has ended. You can still view the
+                            previous messages, but no new messages can be sent.
                         </p>
-
                     </div>
                 ) : (
-
                     /* ==================================================
                        MESSAGE INPUT
                        ================================================== */
@@ -615,19 +571,12 @@ export function ChatWorkspace() {
                         onSubmit={send}
                         className="flex gap-2 border-t border-border p-3"
                     >
-
                         <input
                             value={draft}
                             onChange={(event) =>
-                                setDraft(
-                                    event.target
-                                        .value
-                                )
+                                handleDraftChange(event.target.value)
                             }
-                            disabled={
-                                !activeRoom ||
-                                activeRoom.disabled
-                            }
+                            disabled={!activeRoom || activeRoom.disabled}
                             maxLength={2000}
                             placeholder="Write a message"
                             className="h-11 min-w-0 flex-1 rounded-md border border-border px-3 text-sm outline-none focus:border-accent disabled:cursor-not-allowed disabled:bg-surface-muted disabled:text-ink-muted"
@@ -643,15 +592,10 @@ export function ChatWorkspace() {
                             }
                         >
                             <Send className="size-4" />
-
-                            <span className="sr-only">
-                                Send message
-                            </span>
+                            <span className="sr-only">Send message</span>
                         </Button>
-
                     </form>
                 )}
-
             </section>
         </div>
     );
@@ -856,14 +800,14 @@ export function NotificationWorkspace() {
                                 )
                             }
                             className={`flex w-full gap-4 border-b border-border p-5 text-left last:border-0 ${notification.read
-                                    ? "text-ink-muted"
-                                    : "bg-accent-subtle/40 text-ink"
+                                ? "text-ink-muted"
+                                : "bg-accent-subtle/40 text-ink"
                                 }`}
                         >
                             <span
                                 className={`mt-1 size-2 shrink-0 rounded-full ${notification.read
-                                        ? "bg-border"
-                                        : "bg-accent"
+                                    ? "bg-border"
+                                    : "bg-accent"
                                     }`}
                             />
 

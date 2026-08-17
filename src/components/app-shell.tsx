@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Bell, Compass, LayoutDashboard, LogOut, MessageCircle, Plus, UserRound } from "lucide-react";
+import { Bell, Compass, LayoutDashboard, LogOut, MessageCircle, Plus, Search, UserRound } from "lucide-react";
 import { api, clearSession, getList } from "@/lib/api";
 import type { Notification } from "@/lib/types";
 import { useEffect, useState, type ReactNode } from "react";
@@ -10,6 +10,7 @@ import { useEffect, useState, type ReactNode } from "react";
 const navigation = [
     { href: "/", label: "Overview", icon: LayoutDashboard },
     { href: "/broadcasts", label: "Broadcasts", icon: Compass },
+    { href: "/search", label: "Search", icon: Search },
     { href: "/chat", label: "Messages", icon: MessageCircle },
     { href: "/notifications", label: "Notifications", icon: Bell },
     { href: "/profile", label: "Profile", icon: UserRound },
@@ -79,8 +80,8 @@ export function AppShell({ title, description, children, action }: { title: stri
                                     key={href}
                                     href={href}
                                     className={`inline-flex shrink-0 items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-all ${active
-                                            ? "bg-accent text-surface shadow-sm"
-                                            : "text-ink-muted hover:bg-surface-muted hover:text-ink lg:hover:translate-x-0.5"
+                                        ? "bg-accent text-surface shadow-sm"
+                                        : "text-ink-muted hover:bg-surface-muted hover:text-ink lg:hover:translate-x-0.5"
                                         }`}
                                 >
                                     <Icon className="size-4" />
@@ -92,8 +93,8 @@ export function AppShell({ title, description, children, action }: { title: stri
                                     {count > 0 && (
                                         <span
                                             className={`grid min-w-5 place-items-center rounded-full px-1 text-xs ${active
-                                                    ? "bg-surface/20 text-surface"
-                                                    : "bg-accent-subtle text-accent"
+                                                ? "bg-surface/20 text-surface"
+                                                : "bg-accent-subtle text-accent"
                                                 }`}
                                         >
                                             {count > 99 ? "99+" : count}

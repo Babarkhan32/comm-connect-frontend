@@ -31,9 +31,9 @@ export type Broadcast = {
     postalCode: string;
     maxParticipants: number;
     participantCount: number;
-    status: "ACTIVE" | "FULL" | "EXPIRED" | "CANCELLED";
+    status: "ACTIVE" | "FULL" | "EXPIRED" | "CANCELLED" | "CLOSED";
     recipientId?: string;
-    recipientStatus?: "PENDING" | "ACCEPTED" | "PASSED" | "EXPIRED";
+    recipientStatus?: "PENDING" | "ACCEPTED" | "PASSED" | "EXPIRED" | "CLOSED" | "EXCLUDED" | "LEFT";
     respondedAt?: string;
     creatorId?: User | string;
     interestIds?: Interest[] | string[];
@@ -77,6 +77,32 @@ export type Paginated<T> = {
 export type BroadcastParticipant = {
     _id: string;
     userId: User | string;
-    status: "PENDING" | "ACCEPTED" | "PASSED" | "EXPIRED";
+    status: "PENDING" | "ACCEPTED" | "PASSED" | "EXPIRED" | "CLOSED" | "EXCLUDED" | "LEFT";
     respondedAt?: string;
+};
+
+export type UserProfile = {
+    user: User;
+    attendedEvents: Broadcast[];
+    rating: { average: number; count: number };
+};
+
+export type Rating = {
+    _id?: string;
+    raterId: string;
+    ratedUserId?: string;
+    broadcastId: string;
+    score: number;
+};
+
+export type RatingParticipant = {
+    _id: string;
+    userId: User;
+};
+
+export type BroadcastRatingContext = {
+    broadcast: Broadcast;
+    participants: RatingParticipant[];
+    ratings: Rating[];
+    broadcastRating?: Rating | null;
 };

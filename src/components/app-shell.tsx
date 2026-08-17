@@ -60,11 +60,47 @@ export function AppShell({ title, description, children, action }: { title: stri
             </header>
             <div className="mx-auto grid max-w-7xl lg:grid-cols-[14rem_1fr]">
                 <aside className="border-b border-border/80 bg-surface/80 px-3 py-4 backdrop-blur-sm lg:min-h-[calc(100vh-4rem)] lg:border-r lg:border-b-0">
-                    <nav className="flex gap-1 overflow-x-auto lg:grid">
+                    <nav className="flex gap-1 overflow-x-auto lg:grid lg:overflow-visible">
                         {navigation.map(({ href, label, icon: Icon }) => {
-                            const active = href === "/" ? pathname === href : pathname.startsWith(href);
-                            const count = href === "/notifications" ? notificationCount : href === "/chat" ? chatCount : 0;
-                            return <Link key={href} href={href} className={`inline-flex shrink-0 items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-all ${active ? "bg-accent text-surface shadow-sm" : "text-ink-muted hover:translate-x-0.5 hover:bg-surface-muted hover:text-ink"}`}><Icon className="size-4" /><span className="flex-1">{label}</span>{count > 0 && <span className={`grid min-w-5 place-items-center rounded-full px-1 text-xs ${active ? "bg-surface/20 text-surface" : "bg-accent-subtle text-accent"}`}>{count > 99 ? "99+" : count}</span>}</Link>;
+                            const active =
+                                href === "/"
+                                    ? pathname === href
+                                    : pathname.startsWith(href);
+
+                            const count =
+                                href === "/notifications"
+                                    ? notificationCount
+                                    : href === "/chat"
+                                        ? chatCount
+                                        : 0;
+
+                            return (
+                                <Link
+                                    key={href}
+                                    href={href}
+                                    className={`inline-flex shrink-0 items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-all ${active
+                                            ? "bg-accent text-surface shadow-sm"
+                                            : "text-ink-muted hover:bg-surface-muted hover:text-ink lg:hover:translate-x-0.5"
+                                        }`}
+                                >
+                                    <Icon className="size-4" />
+
+                                    <span className="flex-1">
+                                        {label}
+                                    </span>
+
+                                    {count > 0 && (
+                                        <span
+                                            className={`grid min-w-5 place-items-center rounded-full px-1 text-xs ${active
+                                                    ? "bg-surface/20 text-surface"
+                                                    : "bg-accent-subtle text-accent"
+                                                }`}
+                                        >
+                                            {count > 99 ? "99+" : count}
+                                        </span>
+                                    )}
+                                </Link>
+                            );
                         })}
                     </nav>
                 </aside>

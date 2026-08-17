@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { CalendarDays, Inbox, Radio } from "lucide-react";
 import { api, getList } from "@/lib/api";
 import type { Broadcast } from "@/lib/types";
@@ -16,6 +16,7 @@ function formatEventDate(value: unknown) {
 }
 
 function BroadcastStatusCard({ broadcast, created, onRespond, responding }: { broadcast: Broadcast; created: boolean; onRespond?: (id: string, response: "accept" | "pass") => void; responding?: boolean }) {
+    const router = useRouter();
     const date = formatEventDate(broadcast.eventDate);
     const eventTime = new Date(broadcast.eventDate).getTime();
     const isExpired = broadcast.status === "EXPIRED" || (!Number.isNaN(eventTime) && eventTime <= Date.now());
@@ -37,7 +38,7 @@ function BroadcastStatusCard({ broadcast, created, onRespond, responding }: { br
                 <span className={`shrink-0 rounded-full border px-2.5 py-1 text-xs font-semibold ${isActive ? "border-accent bg-accent-subtle text-accent" : "border-border bg-surface-muted text-ink-muted"}`}>{displayStatus}</span>
             </div>
             <p className="mt-4 flex items-center gap-2 text-sm text-ink-muted"><span className="grid size-7 place-items-center rounded-md bg-accent-subtle text-accent"><CalendarDays className="size-3.5" /></span>{date} · {broadcast.postalCode}</p>
-            {!created && displayStatus === "PENDING" && onRespond && <div className="mt-5 flex gap-2"><button type="button" disabled={responding} onClick={() => onRespond(broadcast._id, "accept")} className="h-9 rounded-md bg-accent px-3 text-sm font-semibold text-surface transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60">{responding ? "Saving..." : "Accept"}</button><button type="button" disabled={responding} onClick={() => onRespond(broadcast._id, "pass")} className="h-9 rounded-md border border-border px-3 text-sm font-semibold text-ink-muted transition-colors hover:border-danger hover:text-danger disabled:cursor-not-allowed disabled:opacity-60">Decline</button></div>}
+            {!created && displayStatus === "PENDING" && onRespond && <div className="mt-5 flex gap-2"><button type="button" disabled={responding} onClick={(event) => { event.stopPropagation(); onRespond(broadcast._id, "accept"); }} className="h-9 rounded-md bg-accent px-3 text-sm font-semibold text-surface transition-colors hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-60">{responding ? "Saving..." : "Accept"}</button><button type="button" disabled={responding} onClick={(event) => { event.stopPropagation(); onRespond(broadcast._id, "pass"); }} className="h-9 rounded-md border border-border px-3 text-sm font-semibold text-ink-muted transition-colors hover:border-danger hover:text-danger disabled:cursor-not-allowed disabled:opacity-60">Decline</button></div>}
             <div className="mt-5 border-t border-border pt-4">
                 <div className="flex items-center justify-between text-xs font-semibold"><span className="text-ink-muted">Participation</span><span className="text-ink">{participantCount} <span className="font-normal text-ink-muted">of {maxParticipants}</span></span></div>
                 <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-surface-muted"><div className="h-full rounded-full bg-accent transition-[width] duration-500" style={{ width: `${participantPercent}%` }} /></div>
@@ -49,7 +50,7 @@ function BroadcastStatusCard({ broadcast, created, onRespond, responding }: { br
         ? `/broadcasts/${broadcast._id}/ratings?recipientId=${encodeURIComponent(broadcast.recipientId ?? "")}`
         : `/broadcasts/${broadcast._id}`;
     if (created || displayStatus !== "PENDING") return <Card as={Link} href={targetHref} interactive className="group relative block overflow-hidden p-5">{cardContent}</Card>;
-    return <Card as="article" interactive className="group relative overflow-hidden p-5">{cardContent}</Card>;
+    return <Card as="article" interactive className="group relative cursor-pointer overflow-hidden p-5" onClick={() => router.push(targetHref)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); router.push(targetHref); } }} role="link" tabIndex={0}>{cardContent}</Card>;
 }
 
 export function BroadcastStatusWorkspace() {
@@ -134,7 +135,7 @@ export function BroadcastStatusWorkspace() {
 
     return (
         <div className="grid gap-6">
-            <div className="inline-flex w-fit border border-border bg-surface p-1 shadow-sm" role="tablist" aria-label="Broadcast type">
+            <div className="inline-flex max-w-full overflow-x-auto border border-border bg-surface p-1 shadow-sm" role="tablist" aria-label="Broadcast type">
                 <button type="button" role="tab" aria-selected={isSent} onClick={() => setActiveTab("sent")} className={`inline-flex h-10 items-center gap-2 px-4 text-sm font-semibold transition-colors ${isSent ? "bg-accent text-surface shadow-sm" : "text-ink-muted hover:bg-surface-muted hover:text-ink"}`}><Radio className="size-4" />Sent broadcasts <span className={`grid min-w-5 place-items-center rounded-full px-1 text-xs ${isSent ? "bg-surface/20 text-surface" : "bg-surface-muted text-ink-muted"}`}>{sentTotal}</span></button>
                 <button type="button" role="tab" aria-selected={!isSent} onClick={() => setActiveTab("received")} className={`inline-flex h-10 items-center gap-2 px-4 text-sm font-semibold transition-colors ${!isSent ? "bg-accent text-surface shadow-sm" : "text-ink-muted hover:bg-surface-muted hover:text-ink"}`}><Inbox className="size-4" />Received <span className={`grid min-w-5 place-items-center rounded-full px-1 text-xs ${!isSent ? "bg-surface/20 text-surface" : "bg-surface-muted text-ink-muted"}`}>{received.length}</span></button>
             </div>
@@ -144,7 +145,7 @@ export function BroadcastStatusWorkspace() {
                     <div><h2 className="font-semibold text-ink">{isSent ? "Your broadcasts" : "Received invitations"}</h2><p className="text-sm text-ink-muted">{isSent ? "Track participation and current status for plans you created." : "Plans shared with your interests nearby."}</p></div>
                 </div>
                 <div className="mb-5 flex flex-wrap items-end gap-3 border border-border bg-surface p-3">
-                    <form onSubmit={(event) => { event.preventDefault(); if (isSent) { setSentQuery(sentSearch); setSentPage(1); } else { setReceivedQuery(receivedSearch); setReceivedPage(1); } }} className="flex min-w-64 flex-1 gap-2">
+                    <form onSubmit={(event) => { event.preventDefault(); if (isSent) { setSentQuery(sentSearch); setSentPage(1); } else { setReceivedQuery(receivedSearch); setReceivedPage(1); } }} className="flex min-w-0 w-full flex-1 gap-2 sm:min-w-64">
                         <input value={isSent ? sentSearch : receivedSearch} onChange={(event) => isSent ? setSentSearch(event.target.value) : setReceivedSearch(event.target.value)} placeholder={isSent ? "Search your broadcasts" : "Search received broadcasts"} className="h-9 min-w-0 flex-1 border border-border bg-surface px-2 text-sm text-ink outline-none focus:border-accent" />
                         <button type="submit" className="h-9 border border-border px-3 text-sm font-semibold text-ink-muted hover:border-accent hover:text-accent">Search</button>
                     </form>

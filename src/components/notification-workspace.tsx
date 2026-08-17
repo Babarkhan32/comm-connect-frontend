@@ -38,7 +38,19 @@ export function NotificationWorkspace() {
         window.addEventListener("comm-connect:notification", onNotification);
         return () => window.removeEventListener("comm-connect:notification", onNotification);
     }, []);
-    async function open(notification: Notification) { try { if (!notification.read) { await api(`/notifications/${notification._id}/read`, { method: "PATCH" }); setNotifications((current) => current.map((item) => item._id === notification._id ? { ...item, read: true } : item)); } const broadcastId = notification.data.broadcastId; if (notification.type === "broadcast:new") { router.push("/broadcasts?tab=received"); return; } if (typeof broadcastId === "string") router.push(`/broadcasts/${broadcastId}`); } catch (reason) { setError(reason instanceof Error ? reason.message : "Could not open notification."); } }
+    async function open(notification: Notification) {
+        const broadcastId = notification.data.broadcastId;
+        try {
+            if (!notification.read && !notification._id.startsWith("realtime-")) {
+                await api(`/notifications/${notification._id}/read`, { method: "PATCH" });
+                setNotifications((current) => current.map((item) => item._id === notification._id ? { ...item, read: true } : item));
+            }
+        } catch (reason) {
+            setError(reason instanceof Error ? reason.message : "Could not mark notification as read.");
+        } finally {
+            if (typeof broadcastId === "string") router.push(`/broadcasts/${broadcastId}`);
+        }
+    }
     async function markAllRead() { try { await api("/notifications/read-all", { method: "PATCH" }); setNotifications((current) => current.map((notification) => ({ ...notification, read: true }))); } catch (reason) { setError(reason instanceof Error ? reason.message : "Could not update notifications."); } }
     if (!notifications.length && !error) return <EmptyState icon={<Bell className="size-5" />} title="All caught up">New invitations and participant responses will appear here.</EmptyState>;
     return <div>{error && <p role="alert" className="mb-4 text-sm text-danger">{error}</p>}<div className="mb-4 flex justify-end"><button onClick={markAllRead} className="text-sm font-semibold text-accent hover:text-accent-hover">Mark all as read</button></div><div className="overflow-hidden rounded-lg border border-border bg-surface shadow-sm">{notifications.map((notification) => <button key={notification._id} onClick={() => void open(notification)} className={`flex w-full gap-4 border-b border-border p-5 text-left transition-colors last:border-0 hover:bg-surface-muted ${notification.read ? "text-ink-muted" : "bg-accent-subtle/40 text-ink"}`}><span className={`mt-1 size-2 shrink-0 rounded-full ${notification.read ? "bg-border" : "bg-accent"}`} /><span><strong className="block text-sm">{notification.type === "broadcast:participant_accepted" ? "Broadcast accepted" : notification.type === "broadcast:participant_passed" ? "Broadcast declined" : notification.type === "broadcast:participant_left" ? "Participant left" : notification.type === "broadcast:participant_removed" ? "Removed from broadcast" : notification.type === "broadcast:application_received" ? "New application" : notification.type === "broadcast:application_accepted" ? "Application accepted" : notification.type === "broadcast:application_rejected" ? "Application rejected" : notification.type === "broadcast:rescheduled" ? "Broadcast rescheduled" : notification.type === "broadcast:new" ? "New broadcast" : "Community update"}</strong><span className="mt-1 block text-sm">{messageFor(notification)}</span><time className="mt-2 block text-xs">{new Date(notification.createdAt).toLocaleString()}</time></span></button>)}</div></div>;

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { Plus, X } from "lucide-react";
+import { CalendarClock, LoaderCircle, Plus, X } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { api, getList } from "@/lib/api";
 import type { Interest, ResolvedAddress } from "@/lib/types";
@@ -14,6 +14,7 @@ export function BroadcastForm() {
   const router = useRouter();
   const [interests, setInterests] = useState<Interest[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
+  const [audienceGender, setAudienceGender] = useState("ANY");
   const [title, setTitle] = useState("");
   const [message, setMessage] = useState("");
   const [currentAddress, setCurrentAddress] = useState<ResolvedAddress | null>(
@@ -73,6 +74,7 @@ export function BroadcastForm() {
           title: title.trim(),
           message,
           interestIds: selected,
+          audiencePreferences: { gender: audienceGender },
           originAddress: currentAddress?.address,
           state: currentAddress?.state,
           postalCode: currentAddress?.postalCode,
@@ -85,7 +87,7 @@ export function BroadcastForm() {
             : destination?.location,
           destinationToBeDecided,
           radiusKm: Number(formData.get("radiusKm")),
-          eventDate: new Date(String(formData.get("eventDate"))).toISOString(),
+          eventDate: new Date(`${String(formData.get("eventDate"))}T${String(formData.get("eventTime"))}`).toISOString(),
           maxParticipants: Number(formData.get("maxParticipants")),
         }),
       });
@@ -209,8 +211,7 @@ export function BroadcastForm() {
         <section className="border-t border-border pt-5">
           <p className="text-sm font-semibold text-ink">Current address</p>
           <p className="mt-1 text-sm leading-6 text-ink-muted">
-            This address is the centre of the radius used to find nearby people.
-            It is not the activity destination.
+            This address is shown to people who receive your broadcast and is used as the centre of the radius used to find nearby people. If you are not comfortable sharing your exact address, use a city, district, or nearby public place instead. It is not the activity destination.
           </p>
           <div className="mt-4">
             <AddressPicker
@@ -268,14 +269,19 @@ export function BroadcastForm() {
             ))}
           </div>
         </div>
+        <label className="grid max-w-sm gap-1.5 text-sm font-medium text-ink">Preferred gender
+          <select value={audienceGender} onChange={(event) => setAudienceGender(event.target.value)} className="h-11 rounded-md border border-border bg-surface px-3 text-ink outline-none focus:border-accent focus:ring-4 focus:ring-accent-subtle/70">
+            <option value="ANY">Everyone</option>
+            <option value="MALE">Men only</option>
+            <option value="FEMALE">Women only</option>
+            <option value="OTHER">Other gender only</option>
+          </select>
+        </label>
       </Card>
       <Card className="grid gap-4 p-5 sm:grid-cols-2">
-        <Field
-          label="Date and time"
-          name="eventDate"
-          type="datetime-local"
-          required
-        />
+        <label className="grid gap-1.5 text-sm font-medium text-ink">Event date<input name="eventDate" type="date" required className="h-11 rounded-md border border-border bg-surface px-3 text-ink shadow-sm outline-none focus:border-accent focus:ring-4 focus:ring-accent-subtle/70" /></label>
+        <label className="grid gap-1.5 text-sm font-medium text-ink">Start time<input name="eventTime" type="time" required onClick={(event) => event.currentTarget.showPicker?.()} className="h-11 rounded-md border border-border bg-surface px-3 text-ink shadow-sm outline-none focus:border-accent focus:ring-4 focus:ring-accent-subtle/70" /></label>
+        <p className="flex items-center gap-2 text-xs text-ink-muted sm:col-span-2"><CalendarClock className="size-4 text-accent" />Choose the local date and start time for your broadcast.</p>
         <Field
           label="Maximum participants"
           name="maxParticipants"
@@ -313,8 +319,8 @@ export function BroadcastForm() {
           }
           type="submit"
         >
-          <Plus className="size-4" />
-          Publish broadcast
+          {saving ? <LoaderCircle className="size-4 animate-spin" /> : <Plus className="size-4" />}
+          {saving ? "Publishing..." : "Publish broadcast"}
         </Button>
         <Link
           href="/broadcasts"

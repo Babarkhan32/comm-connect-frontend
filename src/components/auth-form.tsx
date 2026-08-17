@@ -33,7 +33,7 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
         setLoading(true);
         try {
             const body = isSignup
-                ? { firstName: formData.get("firstName"), lastName: formData.get("lastName"), email: formData.get("email"), password: formData.get("password"), postalCode: address?.postalCode, location: address ? { address: address.address, lng: address.location.lng, lat: address.location.lat } : undefined }
+                ? { firstName: formData.get("firstName"), lastName: formData.get("lastName"), dateOfBirth: formData.get("dateOfBirth"), gender: formData.get("gender"), email: formData.get("email"), password: formData.get("password"), postalCode: address?.postalCode, location: address ? { address: address.address, lng: address.location.lng, lat: address.location.lat } : undefined }
                 : { email: formData.get("email"), password: formData.get("password") };
             const response = await api<AuthResponse>(isSignup ? "/users" : "/auth/login", { method: "POST", body: JSON.stringify(body) });
             if (isSignup) {
@@ -66,6 +66,7 @@ export function AuthForm({ mode }: { mode: "login" | "signup" }) {
                     <h2 className="mt-2 text-3xl font-bold tracking-tight text-ink">{isSignup ? "Start connecting nearby" : "Sign in to your community"}</h2>
                     <form action={submit} className="mt-8 grid gap-4">
                         {isSignup && <div className="grid gap-4 sm:grid-cols-2"><Field label="First name" name="firstName" autoComplete="given-name" required /><Field label="Last name" name="lastName" autoComplete="family-name" required /></div>}
+                        {isSignup && <div className="grid gap-4 sm:grid-cols-2"><Field label="Date of birth" name="dateOfBirth" type="date" required /><label className="grid gap-1.5 text-sm font-medium text-ink">Gender<select name="gender" required defaultValue="" className="h-11 rounded-md border border-border bg-surface px-3 text-ink outline-none focus:border-accent focus:ring-4 focus:ring-accent-subtle/70"><option value="" disabled>Select gender</option><option value="MALE">Male</option><option value="FEMALE">Female</option><option value="OTHER">Other</option></select></label></div>}
                         <Field label="Email address" name="email" type="email" autoComplete="email" required />
                         {isSignup && <AddressPicker value={address} onChange={setAddress} />}
                         <div className="grid gap-1.5"><Field label="Password" name="password" type="password" autoComplete={isSignup ? "new-password" : "current-password"} hint={isSignup ? "Use at least 8 characters." : undefined} required minLength={8} />

@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { ImagePlus, Save, UserRound } from "lucide-react";
 import { api } from "@/lib/api";
-import type { User } from "@/lib/types";
+import type { ResolvedAddress, User } from "@/lib/types";
+import { AddressPicker } from "./address-picker";
 import { Button, Field } from "./ui";
 
 type UploadResponse = { uploadUrl: string; fileUrl: string; expiresIn: number; headers: Record<string, string> };
@@ -14,12 +15,23 @@ export function ProfileWorkspace() {
     const [selectedFile, setSelectedFile] = useState<File | null>(null);
     const [previewUrl, setPreviewUrl] = useState("");
     const [error, setError] = useState("");
+    const [success, setSuccess] = useState("");
     const [saving, setSaving] = useState(false);
     const [uploading, setUploading] = useState(false);
+    const [homeAddress, setHomeAddress] = useState<ResolvedAddress | null>(null);
 
     useEffect(() => {
         const refreshImage = () => Promise.all([api<User>("/users/me"), api<{ url: string | null }>("/users/me/profile-image/url")])
-            .then(([profile, image]) => { setUser(profile); setDisplayImageUrl(image.url ?? profile.photoUrl ?? ""); })
+            .then(([profile, image]) => {
+                setUser(profile);
+                setDisplayImageUrl(image.url ?? profile.photoUrl ?? "");
+                setHomeAddress(profile.address && profile.homeLocation ? {
+                    address: profile.address,
+                    postalCode: profile.postalCode ?? "",
+                    state: "",
+                    location: { lng: profile.homeLocation.coordinates[0], lat: profile.homeLocation.coordinates[1] },
+                } : null);
+            })
             .catch((reason: Error) => setError(reason.message));
         void refreshImage();
         const timer = window.setInterval(() => void refreshImage(), 14 * 60 * 1000);
@@ -40,6 +52,7 @@ export function ProfileWorkspace() {
         if (!user) return;
         setUploading(true);
         setError("");
+        setSuccess("");
         try {
             const presigned = await api<UploadResponse>("/users/me/profile-image/presign", {
                 method: "POST",
@@ -66,6 +79,7 @@ export function ProfileWorkspace() {
             setUser(updated);
             setDisplayImageUrl(presigned.fileUrl);
             setSelectedFile(null);
+            setSuccess("Profile picture updated.");
         } catch (reason) {
             setError(reason instanceof Error ? reason.message : "Could not upload your profile picture.");
         } finally {
@@ -77,16 +91,20 @@ export function ProfileWorkspace() {
         if (!user) return;
         setSaving(true);
         setError("");
+        setSuccess("");
         try {
             const updated = await api<User>(`/users/${user._id}`, {
                 method: "PATCH",
                 body: JSON.stringify({
                     firstName: formData.get("firstName"),
                     lastName: formData.get("lastName"),
-                    postalCode: formData.get("postalCode") || undefined,
+                    gender: formData.get("gender") || undefined,
+                    postalCode: homeAddress?.postalCode || user.postalCode || undefined,
+                    location: homeAddress ? { address: homeAddress.address, lng: homeAddress.location.lng, lat: homeAddress.location.lat } : undefined,
                 }),
             });
             setUser(updated);
+            setSuccess("Profile saved successfully.");
         } catch (reason) {
             setError(reason instanceof Error ? reason.message : "Could not save your profile.");
         } finally {
@@ -110,8 +128,10 @@ export function ProfileWorkspace() {
             </label>
         </section>
         {uploading && <p className="text-sm text-ink-muted">Uploading profile picture...</p>}
-        <section className="grid gap-4 border border-border bg-surface p-5 sm:grid-cols-2"><Field label="First name" name="firstName" defaultValue={user.firstName} required /><Field label="Last name" name="lastName" defaultValue={user.lastName} required /><Field label="Postal code" name="postalCode" defaultValue={user.postalCode} /></section>
+        <section className="grid gap-4 border border-border bg-surface p-5 sm:grid-cols-2"><Field label="First name" name="firstName" defaultValue={user.firstName} required /><Field label="Last name" name="lastName" defaultValue={user.lastName} required /><label className="grid gap-1.5 text-sm font-medium text-ink">Date of birth<input type="date" value={user.dateOfBirth?.slice(0, 10) ?? ""} readOnly className="h-11 rounded-md border border-border bg-surface-muted px-3 text-ink-muted outline-none" /></label><label className="grid gap-1.5 text-sm font-medium text-ink">Gender<select name="gender" defaultValue={user.gender ?? ""} className="h-11 rounded-md border border-border bg-surface px-3 text-ink outline-none focus:border-accent focus:ring-4 focus:ring-accent-subtle/70"><option value="">Not specified</option><option value="MALE">Male</option><option value="FEMALE">Female</option><option value="OTHER">Other</option></select></label></section>
+        <section className="border border-border bg-surface p-5"><p className="mb-1 text-sm font-semibold text-ink">Home address</p><p className="mb-4 text-sm text-ink-muted">Private. Used only for nearby broadcast matching and never shown on your public profile.</p><AddressPicker label="Home address" value={homeAddress} onChange={setHomeAddress} /></section>
         {error && <p role="alert" className="text-sm text-danger">{error}</p>}
+        {success && <p role="status" className="text-sm font-medium text-success">{success}</p>}
         <Button loading={saving} type="submit" className="w-fit"><Save className="size-4" />Save profile</Button>
     </form>;
 }

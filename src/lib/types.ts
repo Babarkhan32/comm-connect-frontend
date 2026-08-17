@@ -7,6 +7,10 @@ export type User = {
     photoUrl?: string;
     postalCode?: string;
     interestIds?: string[];
+    dateOfBirth?: string;
+    gender?: "MALE" | "FEMALE" | "OTHER";
+    address?: string;
+    homeLocation?: { type: "Point"; coordinates: [number, number] };
 };
 
 export type Interest = { _id: string; name: string; icon?: string };
@@ -33,7 +37,7 @@ export type Broadcast = {
     participantCount: number;
     status: "ACTIVE" | "FULL" | "EXPIRED" | "CANCELLED" | "CLOSED";
     recipientId?: string;
-    recipientStatus?: "PENDING" | "ACCEPTED" | "PASSED" | "EXPIRED" | "CLOSED" | "EXCLUDED" | "LEFT" | "REMOVED";
+    recipientStatus?: "PENDING" | "ACCEPTED" | "PASSED" | "EXPIRED" | "CLOSED" | "EXCLUDED" | "LEFT" | "REMOVED" | "APPLIED";
     respondedAt?: string;
     creatorId?: User | string;
     interestIds?: Interest[] | string[];
@@ -123,4 +127,4 @@ export type ProfileEventsPage = {
 };
 
 export type FeedMedia = { key: string; url: string; mediaType: "image" | "video"; likeCount: number; likedByUser: boolean };
-export type FeedBroadcast = Broadcast & { media: FeedMedia[]; applicationStatus?: string | null; isCreator?: boolean; canApply?: boolean };
+export type FeedBroadcast = Broadcast & { media: FeedMedia[]; audienceGender?: "ANY" | "MALE" | "FEMALE" | "OTHER"; applicationStatus?: "PENDING" | "ACCEPTED" | "REJECTED" | null; isCreator?: boolean; canApply?: boolean };

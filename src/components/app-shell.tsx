@@ -48,8 +48,8 @@ export function AppShell({ title, description, children, action }: { title: stri
     return (
         <div className="min-h-screen bg-canvas">
             <header className="sticky top-0 z-10 border-b border-border/80 bg-surface/90 backdrop-blur">
-                <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-5 lg:px-8">
-                    <Link href="/" className="inline-flex items-center gap-2.5 text-lg font-bold tracking-tight text-ink"><span className="grid size-8 place-items-center rounded-md bg-accent text-sm text-surface shadow-sm">C</span>Comm Connect</Link>
+                <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-3 px-4 sm:px-5 lg:px-8">
+                    <Link href="/" className="inline-flex min-w-0 items-center gap-2.5 text-lg font-bold tracking-tight text-ink"><span className="grid size-8 shrink-0 place-items-center rounded-md bg-accent text-sm text-surface shadow-sm">C</span><span className="truncate">Comm Connect</span></Link>
                     <div className="flex items-center gap-2">
                         <Link href="/broadcasts/new" className="inline-flex size-10 items-center justify-center rounded-md bg-accent text-surface shadow-sm transition-transform hover:-translate-y-0.5 hover:bg-accent-hover" aria-label="Create broadcast" title="Create broadcast">
                             <Plus className="size-5" />
@@ -61,8 +61,8 @@ export function AppShell({ title, description, children, action }: { title: stri
                 </div>
             </header>
             <div className="mx-auto grid max-w-7xl lg:grid-cols-[14rem_1fr]">
-                <aside className="border-b border-border/80 bg-surface/80 px-3 py-4 backdrop-blur-sm lg:min-h-[calc(100vh-4rem)] lg:border-r lg:border-b-0">
-                    <nav className="flex gap-1 overflow-x-auto lg:grid lg:overflow-visible">
+                <aside className="border-b border-border/80 bg-surface/80 px-2 py-3 backdrop-blur-sm sm:px-3 sm:py-4 lg:min-h-[calc(100vh-4rem)] lg:border-r lg:border-b-0">
+                    <nav className="flex gap-1 overflow-x-auto pb-1 lg:grid lg:overflow-visible lg:pb-0">
                         {navigation.map(({ href, label, icon: Icon }) => {
                             const active =
                                 href === "/"
@@ -80,7 +80,7 @@ export function AppShell({ title, description, children, action }: { title: stri
                                 <Link
                                     key={href}
                                     href={href}
-                                    className={`inline-flex shrink-0 items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-all ${active
+                                    className={`inline-flex shrink-0 items-center gap-2 rounded-md px-2.5 py-2.5 text-sm font-medium transition-all sm:gap-3 sm:px-3 ${active
                                         ? "bg-accent text-surface shadow-sm"
                                         : "text-ink-muted hover:bg-surface-muted hover:text-ink lg:hover:translate-x-0.5"
                                         }`}
@@ -106,9 +106,9 @@ export function AppShell({ title, description, children, action }: { title: stri
                         })}
                     </nav>
                 </aside>
-                <main className="page-enter min-w-0 px-5 py-8 lg:px-10 lg:py-10">
-                    <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
-                        <div className="app-heading"><h1 className="text-3xl font-bold tracking-tight text-ink">{title}</h1><p className="mt-2 max-w-xl text-sm leading-6 text-ink-muted">{description}</p></div>
+                <main className="page-enter min-w-0 px-4 py-6 sm:px-5 sm:py-8 lg:px-10 lg:py-10">
+                    <div className="mb-6 flex flex-wrap items-end justify-between gap-4 sm:mb-8">
+                        <div className="app-heading min-w-0"><h1 className="text-2xl font-bold tracking-tight text-ink sm:text-3xl">{title}</h1><p className="mt-2 max-w-xl text-sm leading-6 text-ink-muted">{description}</p></div>
                         {action}
                     </div>
                     {children}

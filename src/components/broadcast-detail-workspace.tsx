@@ -50,20 +50,26 @@ export function BroadcastDetailWorkspace() {
         return () => URL.revokeObjectURL(url);
     }, [videoFile]);
     useEffect(() => {
-        Promise.all([
-            api<Broadcast>(`/broadcasts/${id}`),
-            getList<BroadcastParticipant>(`/broadcasts/${id}/participants?limit=100`),
-            api<BroadcastParticipant[]>(`/broadcasts/${id}/applications`).catch(() => []),
-            api<{ imageUrls: string[]; imageMedia: { key: string; url: string }[]; coverImageUrl: string | null; highlightVideoUrl: string | null; introVideoUrl: string | null }>(`/broadcasts/${id}/images`),
-        ])
-            .then(([result, people, applicationsResult, media]) => {
-                setBroadcast({ ...result, imageUrls: media.imageUrls, imageMedia: media.imageMedia, coverImageUrl: media.coverImageUrl, highlightVideoUrl: media.highlightVideoUrl, introVideoUrl: media.introVideoUrl });
-                setEditTitle(result.title ?? "");
-                setEditMessage(result.message ?? "");
-                setEditEventDate(result.eventDate ? new Date(result.eventDate).toISOString().slice(0, 16) : "");
-                setParticipants(people.data);
-                setApplications(applicationsResult);
-            })
+        async function loadBroadcast() {
+            const result = await api<Broadcast>(`/broadcasts/${id}`);
+            const currentUserId = getSession()?.user?._id;
+            const creatorId = typeof result.creatorId === "string" ? result.creatorId : result.creatorId?._id;
+            const applicationsRequest = creatorId && creatorId === currentUserId
+                ? api<BroadcastParticipant[]>(`/broadcasts/${id}/applications`)
+                : Promise.resolve<BroadcastParticipant[]>([]);
+            const [people, applicationsResult, media] = await Promise.all([
+                getList<BroadcastParticipant>(`/broadcasts/${id}/participants?limit=100`),
+                applicationsRequest,
+                api<{ imageUrls: string[]; imageMedia: { key: string; url: string }[]; coverImageUrl: string | null; highlightVideoUrl: string | null; introVideoUrl: string | null }>(`/broadcasts/${id}/images`).catch(() => null),
+            ]);
+            setBroadcast({ ...result, ...(media ? { imageUrls: media.imageUrls, imageMedia: media.imageMedia, coverImageUrl: media.coverImageUrl, highlightVideoUrl: media.highlightVideoUrl, introVideoUrl: media.introVideoUrl } : {}) });
+            setEditTitle(result.title ?? "");
+            setEditMessage(result.message ?? "");
+            setEditEventDate(result.eventDate ? new Date(result.eventDate).toISOString().slice(0, 16) : "");
+            setParticipants(people.data);
+            setApplications(applicationsResult);
+        }
+        loadBroadcast()
             .catch((reason: Error) => setError(reason.message));
     }, [id]);
     async function respond(response: "accept" | "pass") {
@@ -172,7 +178,7 @@ export function BroadcastDetailWorkspace() {
         setImageFiles((current) => current.filter((_, imageIndex) => imageIndex !== index));
     }
     async function exclude(userId: string) {
-            const recipient = participants.find((item) => userIdOf(item) === userId) ?? applications.find((item) => userIdOf(item) === userId);
+        const recipient = participants.find((item) => userIdOf(item) === userId) ?? applications.find((item) => userIdOf(item) === userId);
         const recipientId = recipient?._id ?? userId;
         setBusy(recipientId);
         try {
@@ -249,6 +255,7 @@ export function BroadcastDetailWorkspace() {
         typeof broadcast.creatorId === "string"
             ? broadcast.creatorId
             : broadcast.creatorId?._id;
+    const creator = typeof broadcast.creatorId === "string" ? null : broadcast.creatorId;
     const isOwner = creatorId === currentUserId;
     const currentParticipant = participants.find(isCurrentUser);
     const canRespond =
@@ -292,12 +299,14 @@ export function BroadcastDetailWorkspace() {
                         {broadcast.status}
                     </span>
                 </div>
+                {creator && <Link href={`/users/${creator._id}`} className="mt-5 flex w-fit items-center gap-3 border-t border-border pt-5 transition-colors hover:text-accent"><span className="grid size-10 place-items-center overflow-hidden rounded-full bg-accent-subtle text-accent">{creator.photoUrl ? <img src={creator.photoUrl} alt={`${creator.firstName} profile`} className="size-full object-cover" /> : <UserRound className="size-5" />}</span><span><span className="block text-xs font-semibold uppercase tracking-wide text-ink-muted">Created by</span><strong className="block text-sm text-ink">{creator.firstName} {creator.lastName}</strong></span></Link>}
                 {isOwner && !editing && broadcast.status !== "EXPIRED" && broadcast.status !== "CANCELLED" && <Button onClick={() => setEditing(true)} className="mt-5">Edit broadcast</Button>}
                 {isOwner && editing && <div className="mt-5 grid gap-3 border-t border-border pt-5"><label className="grid gap-1 text-sm font-semibold text-ink">Title<input value={editTitle} onChange={(event) => setEditTitle(event.target.value)} maxLength={120} className="h-10 border border-border px-3 text-sm font-normal outline-none focus:border-accent" /></label><label className="grid gap-1 text-sm font-semibold text-ink">Message<textarea value={editMessage} onChange={(event) => setEditMessage(event.target.value)} maxLength={1000} rows={3} className="border border-border px-3 py-2 text-sm font-normal outline-none focus:border-accent" /></label><label className="grid gap-1 text-sm font-semibold text-ink">Event date<input type="datetime-local" value={editEventDate} onChange={(event) => setEditEventDate(event.target.value)} className="h-10 border border-border px-3 text-sm font-normal outline-none focus:border-accent" /></label><div className="flex gap-2"><Button loading={savingEdit} onClick={() => void saveBroadcastEdit()}>Save changes</Button><button type="button" onClick={() => setEditing(false)} className="border border-border px-4 text-sm font-semibold text-ink-muted">Cancel</button></div><p className="text-xs text-ink-muted">Interests cannot be changed after publishing. Accepted participants stay enrolled when the date changes.</p></div>}
                 <div className="mt-6 flex flex-wrap gap-6 border-t border-border pt-4 text-sm text-ink-muted">
                     <span>
                         {broadcast.participantCount} of {broadcast.maxParticipants} accepted
                     </span>
+                    {broadcast.originAddress && <span>Current address: {broadcast.originAddress}</span>}
                     <span>
                         {broadcast.postalCode}, {broadcast.state}
                     </span>
@@ -314,7 +323,7 @@ export function BroadcastDetailWorkspace() {
                         <Button
                             loading={busy === "pass"}
                             onClick={() => void respond("pass")}
-                            className="bg-surface-muted text-ink hover:bg-surface-muted"
+                            className="!border !border-border !bg-surface-muted !text-ink hover:!bg-border"
                         >
                             <XCircle className="size-4" />
                             Decline

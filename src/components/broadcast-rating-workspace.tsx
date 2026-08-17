@@ -7,6 +7,7 @@ import { useParams } from "next/navigation";
 import { useSearchParams } from "next/navigation";
 import { api } from "@/lib/api";
 import type { BroadcastRatingContext } from "@/lib/types";
+import { getSession } from "@/lib/api";
 import { showToast } from "./toast";
 import { Button, Card } from "./ui";
 
@@ -49,9 +50,12 @@ export function BroadcastRatingWorkspace() {
 
     if (error) return <div className="grid gap-4"><Link href={`/broadcasts/${id}`} className="inline-flex items-center gap-2 text-sm font-semibold text-accent"><ArrowLeft className="size-4" />Back to broadcast</Link><p role="alert" className="text-sm text-danger">{error}</p></div>;
     if (!context) return <div className="h-72 animate-pulse bg-surface-muted" />;
+    const currentUserId = getSession()?.user?._id;
+    const creatorId = typeof context.broadcast.creatorId === "string" ? context.broadcast.creatorId : context.broadcast.creatorId?._id;
+    const isCreator = creatorId === currentUserId;
     return <div className="grid max-w-3xl gap-6">
         <Link href={`/broadcasts/${id}`} className="inline-flex w-fit items-center gap-2 text-sm font-semibold text-accent"><ArrowLeft className="size-4" />Back to broadcast</Link>
-        <Card className="p-6"><div className="flex items-start gap-3"><CalendarHeart className="mt-1 size-6 text-accent" /><div><p className="text-xs font-semibold uppercase tracking-wide text-accent">Post-event review</p><h2 className="mt-1 text-2xl font-bold text-ink">{context.broadcast.title ?? context.broadcast.message}</h2><p className="mt-2 text-sm text-ink-muted">How was this broadcast?</p><div className="mt-3"><Stars value={broadcastScore} onChange={(score) => void saveBroadcast(score)} disabled={saving === "broadcast"} /></div></div></div></Card>
+        {!isCreator && <Card className="p-6"><div className="flex items-start gap-3"><CalendarHeart className="mt-1 size-6 text-accent" /><div><p className="text-xs font-semibold uppercase tracking-wide text-accent">Post-event review</p><h2 className="mt-1 text-2xl font-bold text-ink">{context.broadcast.title ?? context.broadcast.message}</h2><p className="mt-2 text-sm text-ink-muted">How was this broadcast?</p><div className="mt-3"><Stars value={broadcastScore} onChange={(score) => void saveBroadcast(score)} disabled={saving === "broadcast"} /></div></div></div></Card>}
         <section><div className="mb-3"><h3 className="text-lg font-semibold text-ink">People you attended with</h3><p className="mt-1 text-sm text-ink-muted">Rate the accepted participants from this broadcast.</p></div>{context.participants.length ? <div className="grid gap-3">{context.participants.map((participant) => { const person = participant.userId; return <Card key={participant._id} className="flex flex-wrap items-center justify-between gap-4 p-4"><Link href={`/users/${person._id}`} className="flex items-center gap-3 hover:text-accent"><span className="grid size-10 place-items-center rounded-full bg-accent-subtle text-accent"><UserRound className="size-5" /></span><span><strong className="block text-sm text-ink">{person.firstName} {person.lastName}</strong><span className="text-xs text-ink-muted">Open profile</span></span></Link><Stars value={userScores[person._id] ?? 0} onChange={(score) => void saveUser(person._id, score)} disabled={saving === person._id} /></Card>; })}</div> : <Card className="p-5 text-sm text-ink-muted">There are no other accepted participants to review.</Card>}</section>
     </div>;
 }

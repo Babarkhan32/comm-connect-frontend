@@ -1,17 +1,117 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Save, UserRound } from "lucide-react";
+import { ImagePlus, Save, UserRound } from "lucide-react";
 import { api } from "@/lib/api";
 import type { User } from "@/lib/types";
 import { Button, Field } from "./ui";
 
+type UploadResponse = { uploadUrl: string; fileUrl: string; expiresIn: number; headers: Record<string, string> };
+
 export function ProfileWorkspace() {
     const [user, setUser] = useState<User | null>(null);
+    const [displayImageUrl, setDisplayImageUrl] = useState("");
+    const [selectedFile, setSelectedFile] = useState<File | null>(null);
+    const [previewUrl, setPreviewUrl] = useState("");
     const [error, setError] = useState("");
     const [saving, setSaving] = useState(false);
-    useEffect(() => { api<User>("/users/me").then(setUser).catch((reason: Error) => setError(reason.message)); }, []);
-    async function submit(formData: FormData) { if (!user) return; setSaving(true); setError(""); try { const updated = await api<User>(`/users/${user._id}`, { method: "PATCH", body: JSON.stringify({ firstName: formData.get("firstName"), lastName: formData.get("lastName"), photoUrl: formData.get("photoUrl") || undefined, postalCode: formData.get("postalCode") || undefined }) }); setUser(updated); } catch (reason) { setError(reason instanceof Error ? reason.message : "Could not save your profile."); } finally { setSaving(false); } }
+    const [uploading, setUploading] = useState(false);
+
+    useEffect(() => {
+        const refreshImage = () => Promise.all([api<User>("/users/me"), api<{ url: string | null }>("/users/me/profile-image/url")])
+            .then(([profile, image]) => { setUser(profile); setDisplayImageUrl(image.url ?? profile.photoUrl ?? ""); })
+            .catch((reason: Error) => setError(reason.message));
+        void refreshImage();
+        const timer = window.setInterval(() => void refreshImage(), 14 * 60 * 1000);
+        return () => window.clearInterval(timer);
+    }, []);
+
+    useEffect(() => {
+        if (!selectedFile) {
+            setPreviewUrl("");
+            return;
+        }
+        const url = URL.createObjectURL(selectedFile);
+        setPreviewUrl(url);
+        return () => URL.revokeObjectURL(url);
+    }, [selectedFile]);
+
+    async function uploadProfileImage(file: File) {
+        if (!user) return;
+        setUploading(true);
+        setError("");
+        try {
+            const presigned = await api<UploadResponse>("/users/me/profile-image/presign", {
+                method: "POST",
+                body: JSON.stringify({ fileName: file.name, contentType: file.type, fileSize: file.size }),
+            });
+            let uploadResponse: Response;
+            try {
+                uploadResponse = await fetch(presigned.uploadUrl, {
+                    method: "PUT",
+                    headers: presigned.headers,
+                    body: file,
+                });
+            } catch {
+                throw new Error("The browser could not reach S3. Verify the bucket region, CORS origin, and that the frontend is running at http://localhost:3000.");
+            }
+            if (!uploadResponse.ok) {
+                const details = await uploadResponse.text().catch(() => "");
+                throw new Error(`S3 upload failed (${uploadResponse.status}). ${details.slice(0, 240) || "Check bucket permissions, region, and CORS configuration."}`);
+            }
+            const updated = await api<User>(`/users/${user._id}`, {
+                method: "PATCH",
+                body: JSON.stringify({ photoUrl: presigned.fileUrl }),
+            });
+            setUser(updated);
+            setDisplayImageUrl(presigned.fileUrl);
+            setSelectedFile(null);
+        } catch (reason) {
+            setError(reason instanceof Error ? reason.message : "Could not upload your profile picture.");
+        } finally {
+            setUploading(false);
+        }
+    }
+
+    async function submit(formData: FormData) {
+        if (!user) return;
+        setSaving(true);
+        setError("");
+        try {
+            const updated = await api<User>(`/users/${user._id}`, {
+                method: "PATCH",
+                body: JSON.stringify({
+                    firstName: formData.get("firstName"),
+                    lastName: formData.get("lastName"),
+                    postalCode: formData.get("postalCode") || undefined,
+                }),
+            });
+            setUser(updated);
+        } catch (reason) {
+            setError(reason instanceof Error ? reason.message : "Could not save your profile.");
+        } finally {
+            setSaving(false);
+        }
+    }
+
     if (!user) return <div className="h-64 animate-pulse bg-surface-muted" />;
-    return <form action={submit} className="grid max-w-2xl gap-6"><section className="flex items-center gap-4 border border-border bg-surface p-5"><div className="grid size-14 place-items-center rounded-full bg-accent-subtle text-accent"><UserRound className="size-7" /></div><div><h2 className="font-semibold text-ink">{user.firstName} {user.lastName}</h2><p className="text-sm text-ink-muted">{user.email ?? user.phone}</p></div></section><section className="grid gap-4 border border-border bg-surface p-5 sm:grid-cols-2"><Field label="First name" name="firstName" defaultValue={user.firstName} required /><Field label="Last name" name="lastName" defaultValue={user.lastName} required /><Field label="Photo URL" name="photoUrl" type="url" defaultValue={user.photoUrl} /><Field label="Postal code" name="postalCode" defaultValue={user.postalCode} /></section>{error && <p role="alert" className="text-sm text-danger">{error}</p>}<Button loading={saving} type="submit" className="w-fit"><Save className="size-4" />Save profile</Button></form>;
+    const imageUrl = previewUrl || displayImageUrl || user.photoUrl;
+    return <form action={submit} className="grid max-w-2xl gap-6">
+        <section className="flex flex-wrap items-center justify-between gap-5 border border-border bg-surface p-5">
+            <div className="flex items-center gap-4">
+                <div className="grid size-16 place-items-center overflow-hidden rounded-full bg-accent-subtle text-accent">
+                    {imageUrl ? <img src={imageUrl} alt={`${user.firstName} profile`} className="size-full object-cover" /> : <UserRound className="size-7" />}
+                </div>
+                <div><h2 className="font-semibold text-ink">{user.firstName} {user.lastName}</h2><p className="text-sm text-ink-muted">{user.email ?? user.phone}</p></div>
+            </div>
+            <label className="inline-flex h-10 cursor-pointer items-center gap-2 border border-border px-3 text-sm font-semibold text-ink-muted hover:border-accent hover:text-accent">
+                <ImagePlus className="size-4" />Choose picture
+                <input type="file" accept="image/jpeg,image/png,image/webp" className="sr-only" onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadProfileImage(file); }} />
+            </label>
+        </section>
+        {uploading && <p className="text-sm text-ink-muted">Uploading profile picture...</p>}
+        <section className="grid gap-4 border border-border bg-surface p-5 sm:grid-cols-2"><Field label="First name" name="firstName" defaultValue={user.firstName} required /><Field label="Last name" name="lastName" defaultValue={user.lastName} required /><Field label="Postal code" name="postalCode" defaultValue={user.postalCode} /></section>
+        {error && <p role="alert" className="text-sm text-danger">{error}</p>}
+        <Button loading={saving} type="submit" className="w-fit"><Save className="size-4" />Save profile</Button>
+    </form>;
 }

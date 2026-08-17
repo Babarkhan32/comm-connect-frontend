@@ -26,6 +26,7 @@ function BroadcastStatusCard({ broadcast, created, onRespond, responding }: { br
     const isActive = displayStatus === "ACTIVE" || displayStatus === "PENDING";
 
     const cardContent = <>
+        {broadcast.coverImageUrl && <div className="mb-4 h-40 w-full overflow-hidden rounded-md bg-surface-muted"><img src={broadcast.coverImageUrl} alt="Broadcast picture" className="size-full object-contain object-top" /></div>}
         <div className={`absolute inset-y-0 left-0 w-1 ${isActive ? "bg-accent" : "bg-border"}`} />
         <div className="pl-2">
             <div className="flex items-start justify-between gap-4">
@@ -150,7 +151,7 @@ export function BroadcastStatusWorkspace() {
                     <label className="grid gap-1 text-xs font-semibold text-ink-muted">Status
                         <select value={isSent ? sentFilter : receivedFilter} onChange={(event) => isSent ? updateSentFilter(event.target.value as typeof sentFilter) : updateReceivedFilter(event.target.value as typeof receivedFilter)} className="h-9 border border-border bg-surface px-2 text-sm font-normal text-ink outline-none focus:border-accent">
                             <option value="ALL">All statuses</option>
-                            {isSent ? <><option value="ACTIVE">Active</option><option value="FULL">Full</option><option value="EXPIRED">Expired</option><option value="CLOSED">Closed</option><option value="CANCELLED">Cancelled</option></> : <><option value="PENDING">Pending</option><option value="ACCEPTED">Accepted</option><option value="PASSED">Passed</option><option value="LEFT">Left</option><option value="EXPIRED">Expired</option></>}
+                            {isSent ? <><option value="ACTIVE">Active</option><option value="FULL">Full</option><option value="EXPIRED">Expired</option><option value="CLOSED">Closed</option><option value="CANCELLED">Cancelled</option></> : <><option value="PENDING">Pending</option><option value="ACCEPTED">Accepted</option><option value="PASSED">Passed</option><option value="LEFT">Left</option><option value="REMOVED">Removed</option><option value="EXPIRED">Expired</option></>}
                         </select>
                     </label>
                     <label className="grid gap-1 text-xs font-semibold text-ink-muted">Sort by

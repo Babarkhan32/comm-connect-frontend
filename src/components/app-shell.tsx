@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Bell, Compass, LayoutDashboard, LogOut, MessageCircle, Plus, Search, UserRound } from "lucide-react";
+import { Bell, Compass, Film, LayoutDashboard, LogOut, MessageCircle, Plus, Search, UserRound } from "lucide-react";
 import { api, clearSession, getList } from "@/lib/api";
 import type { Notification } from "@/lib/types";
 import { useEffect, useState, type ReactNode } from "react";
@@ -10,6 +10,7 @@ import { useEffect, useState, type ReactNode } from "react";
 const navigation = [
     { href: "/", label: "Overview", icon: LayoutDashboard },
     { href: "/broadcasts", label: "Broadcasts", icon: Compass },
+    { href: "/feed", label: "Feed", icon: Film },
     { href: "/search", label: "Search", icon: Search },
     { href: "/chat", label: "Messages", icon: MessageCircle },
     { href: "/notifications", label: "Notifications", icon: Bell },

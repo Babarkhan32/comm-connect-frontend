@@ -1,5 +1,4 @@
 "use client";
-"use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { io, type Socket } from "socket.io-client";
@@ -22,6 +21,10 @@ function roomTitle(room: ChatRoom) {
 
 function roomParticipants(room: ChatRoom) {
     return `${room.participantIds.length} participants`;
+}
+
+function roomSortValue(room: ChatRoom) {
+    return new Date(room.lastMessageAt ?? "").getTime() || new Date((room as ChatRoom & { createdAt?: string }).createdAt ?? "").getTime() || 0;
 }
 
 function relativeMessageTime(value?: string) {
@@ -64,6 +67,10 @@ export function ChatWorkspace() {
     const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
     const [rooms, setRooms] = useState<ChatRoom[]>([]);
+    const [roomPage, setRoomPage] = useState(1);
+    const [roomPages, setRoomPages] = useState(1);
+    const [loadingRooms, setLoadingRooms] = useState(false);
+    const roomSentinelRef = useRef<HTMLDivElement | null>(null);
     const [activeRoom, setActiveRoom] = useState<ChatRoom | null>(null);
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [draft, setDraft] = useState("");
@@ -79,15 +86,29 @@ export function ChatWorkspace() {
        ======================================================== */
 
     useEffect(() => {
-        getList<ChatRoom>("/chat/me/rooms?limit=50")
+        let cancelled = false;
+        setLoadingRooms(true);
+        getList<ChatRoom>(`/chat/me/rooms?page=${roomPage}&limit=20`)
             .then((result) => {
-                setRooms(result.data);
-                setActiveRoom(result.data[0] ?? null);
+                if (cancelled) return;
+                setRooms((current) => roomPage === 1 ? result.data : [...current, ...result.data]);
+                setRoomPages(Math.max(result.pages, 1));
+                if (roomPage === 1) setActiveRoom(result.data[0] ?? null);
             })
-            .catch((reason: Error) => {
-                setError(reason.message);
-            });
-    }, []);
+            .catch((reason: Error) => { if (!cancelled) setError(reason.message); })
+            .finally(() => { if (!cancelled) setLoadingRooms(false); });
+        return () => { cancelled = true; };
+    }, [roomPage]);
+
+    useEffect(() => {
+        const sentinel = roomSentinelRef.current;
+        if (!sentinel || roomPage >= roomPages || loadingRooms) return;
+        const observer = new IntersectionObserver((entries) => {
+            if (entries[0]?.isIntersecting && !loadingRooms) setRoomPage((page) => Math.min(roomPages, page + 1));
+        }, { rootMargin: "160px" });
+        observer.observe(sentinel);
+        return () => observer.disconnect();
+    }, [roomPage, roomPages, loadingRooms]);
 
     /* ========================================================
        UNREAD CHAT EVENT
@@ -114,9 +135,9 @@ export function ChatWorkspace() {
                             lastMessageAt:
                                 detail.timestamp ?? room.lastMessageAt,
                         }
-                        : room
-                )
-            );
+                        : room,
+                    ).sort((left, right) => roomSortValue(right) - roomSortValue(left))
+                    );
         }
 
         window.addEventListener("comm-connect:chat-unread", onUnread);
@@ -201,6 +222,7 @@ export function ChatWorkspace() {
                 messageId: string;
                 roomId: string;
                 senderId: string;
+                senderName?: string;
                 content: string;
                 timestamp: string;
             }) => {
@@ -211,6 +233,7 @@ export function ChatWorkspace() {
                     {
                         _id: message.messageId,
                         senderId: message.senderId,
+                        senderName: message.senderName,
                         content: message.content,
                         createdAt: message.timestamp,
                     },
@@ -415,7 +438,7 @@ export function ChatWorkspace() {
                 ROOM LIST
             ================================================== */}
 
-            <aside className="border-b border-border md:border-r md:border-b-0">
+            <aside className="max-h-[32rem] overflow-y-auto border-b border-border md:border-r md:border-b-0">
                 <div className="border-b border-border px-4 py-3 text-sm font-semibold text-ink">
                     Conversations
                 </div>
@@ -429,25 +452,28 @@ export function ChatWorkspace() {
                             : "text-ink hover:bg-surface-muted"
                             }`}
                     >
-                        <span className="flex items-start justify-between gap-2">
-                            <strong className="min-w-0 truncate text-sm">
-                                {roomTitle(room)}
-                            </strong>
+                        <span className="flex items-start gap-2">
+                            {typeof room.broadcastId === "object" && room.broadcastId?.coverImageUrl ? <img src={room.broadcastId.coverImageUrl} alt="Broadcast" className="size-9 shrink-0 rounded-md object-contain object-top" /> : <span className="grid size-9 shrink-0 place-items-center rounded-md bg-accent-subtle text-accent"><MessageCircle className="size-4" /></span>}
+                            <span className="flex min-w-0 flex-1 items-start justify-between gap-2">
+                                <strong className="min-w-0 truncate text-sm">
+                                    {roomTitle(room)}
+                                </strong>
 
-                            {room.disabled && (
-                                <span className="shrink-0 rounded-full bg-surface-muted px-2 py-0.5 text-[10px] font-medium text-ink-muted">
-                                    Expired
-                                </span>
-                            )}
-
-                            {!room.disabled &&
-                                (room.unreadCount ?? 0) > 0 && (
-                                    <span className="grid min-w-5 place-items-center rounded-full bg-accent px-1 text-xs font-semibold text-surface">
-                                        {room.unreadCount! > 99
-                                            ? "99+"
-                                            : room.unreadCount}
+                                {room.disabled && (
+                                    <span className="shrink-0 rounded-full bg-surface-muted px-2 py-0.5 text-[10px] font-medium text-ink-muted">
+                                        Expired
                                     </span>
                                 )}
+
+                                {!room.disabled &&
+                                    (room.unreadCount ?? 0) > 0 && (
+                                        <span className="grid min-w-5 place-items-center rounded-full bg-accent px-1 text-xs font-semibold text-surface">
+                                            {room.unreadCount! > 99
+                                                ? "99+"
+                                                : room.unreadCount}
+                                        </span>
+                                    )}
+                            </span>
                         </span>
 
                         <span className="mt-1 block truncate text-xs text-ink-muted">
@@ -459,6 +485,8 @@ export function ChatWorkspace() {
                         </span>
                     </button>
                 ))}
+                <div ref={roomSentinelRef} className="h-2" aria-hidden="true" />
+                {loadingRooms && <p className="px-4 py-3 text-xs text-ink-muted">Loading more conversations...</p>}
             </aside>
 
             {/* ==================================================
@@ -517,7 +545,10 @@ export function ChatWorkspace() {
                                     : "bg-surface-muted text-ink"
                                     }`}
                             >
-                                {message.content}
+                                <>
+                                    <span className="mb-1 block text-xs font-semibold opacity-80">{message.senderId === userId ? "You" : message.senderName ?? "Community member"}</span>
+                                    <span>{message.content}</span>
+                                </>
                             </div>
 
                             <p className="mt-1 text-xs text-ink-muted">

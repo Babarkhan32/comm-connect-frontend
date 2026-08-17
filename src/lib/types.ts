@@ -33,10 +33,15 @@ export type Broadcast = {
     participantCount: number;
     status: "ACTIVE" | "FULL" | "EXPIRED" | "CANCELLED" | "CLOSED";
     recipientId?: string;
-    recipientStatus?: "PENDING" | "ACCEPTED" | "PASSED" | "EXPIRED" | "CLOSED" | "EXCLUDED" | "LEFT";
+    recipientStatus?: "PENDING" | "ACCEPTED" | "PASSED" | "EXPIRED" | "CLOSED" | "EXCLUDED" | "LEFT" | "REMOVED";
     respondedAt?: string;
     creatorId?: User | string;
     interestIds?: Interest[] | string[];
+    imageUrls?: string[];
+    coverImageUrl?: string | null;
+    imageMedia?: { key: string; url: string }[];
+    highlightVideoUrl?: string | null;
+    introVideoUrl?: string | null;
 };
 
 export type ChatRoom = {
@@ -44,6 +49,7 @@ export type ChatRoom = {
     broadcastId?: {
         _id: string;
         title?: string;
+        coverImageUrl?: string | null;
     } | string;
     participantIds: string[];
     messageCount: number;
@@ -54,6 +60,7 @@ export type ChatRoom = {
 export type ChatMessage = {
     _id: string;
     senderId: string;
+    senderName?: string;
     content: string;
     createdAt: string;
 };
@@ -77,7 +84,7 @@ export type Paginated<T> = {
 export type BroadcastParticipant = {
     _id: string;
     userId: User | string;
-    status: "PENDING" | "ACCEPTED" | "PASSED" | "EXPIRED" | "CLOSED" | "EXCLUDED" | "LEFT";
+    status: "PENDING" | "ACCEPTED" | "PASSED" | "EXPIRED" | "CLOSED" | "EXCLUDED" | "LEFT" | "REMOVED" | "REJECTED";
     respondedAt?: string;
 };
 
@@ -106,3 +113,14 @@ export type BroadcastRatingContext = {
     ratings: Rating[];
     broadcastRating?: Rating | null;
 };
+
+export type ProfileEventsPage = {
+    data: Broadcast[];
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+};
+
+export type FeedMedia = { key: string; url: string; mediaType: "image" | "video"; likeCount: number; likedByUser: boolean };
+export type FeedBroadcast = Broadcast & { media: FeedMedia[]; applicationStatus?: string | null; isCreator?: boolean; canApply?: boolean };

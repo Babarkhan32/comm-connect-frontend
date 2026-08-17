@@ -11,6 +11,10 @@ function notificationMessage(type: string, data: Record<string, unknown>) {
     const title = typeof data.broadcastTitle === "string" ? ` for ${data.broadcastTitle}` : "";
     if (type === "broadcast:participant_accepted") return `${actor} accepted your broadcast${title}.`;
     if (type === "broadcast:participant_passed") return `${actor} declined your broadcast${title}.`;
+    if (type === "broadcast:rescheduled") return `${title} was rescheduled${typeof data.eventDate === "string" ? ` to ${new Date(data.eventDate).toLocaleString()}` : ""}. You remain opted in.`;
+    if (type === "broadcast:application_received") return `${actor} applied to join your broadcast${title}.`;
+    if (type === "broadcast:application_accepted") return `Your application was accepted${title}.`;
+    if (type === "broadcast:application_rejected") return `Your application was rejected${title}.`;
     if (type === "broadcast:room_created") return "Your group chat is ready.";
     if (type === "broadcast:new") return `A new broadcast is available${title}.`;
     return "You have a new community update.";

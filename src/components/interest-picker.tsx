@@ -11,12 +11,12 @@ import { Button, Card, EmptyState } from "./ui";
 
 function InterestChoice({ interest, selected, onToggle }: { interest: Interest; selected: boolean; onToggle: (id: string) => void }) {
     return (
-        <Card as="button" type="button" aria-pressed={selected} onClick={() => onToggle(interest._id)} interactive className={`flex min-h-24 items-center gap-3 p-4 text-left text-sm font-semibold ${selected ? "!border-accent !bg-accent !text-surface" : "text-ink"}`}>
-            <span className={`grid size-9 shrink-0 place-items-center rounded-md ${selected ? "bg-surface/20 text-surface" : "bg-surface-muted text-accent"}`}>
+        <Card as="button" type="button" aria-pressed={selected} onClick={() => onToggle(interest._id)} interactive className={`flex min-h-24 items-center gap-3 p-4 text-left text-sm font-semibold ${selected ? "!border-accent !bg-accent-subtle !text-ink" : "text-ink"}`}>
+            <span className={`grid size-9 shrink-0 place-items-center rounded-md ${selected ? "bg-accent text-surface" : "bg-surface-muted text-accent"}`}>
                 <InterestIcon icon={interest.icon} name={interest.name} className="size-4" />
             </span>
             <span className="min-w-0 flex-1 capitalize">{interest.name}</span>
-            {selected && <Check className="size-4 shrink-0" />}
+            {selected && <Check className="size-4 shrink-0 text-accent" />}
         </Card>
     );
 }

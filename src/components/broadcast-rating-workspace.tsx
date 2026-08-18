@@ -25,9 +25,11 @@ export function BroadcastRatingWorkspace() {
     const [saving, setSaving] = useState("");
     const [error, setError] = useState("");
 
+    console.log("Search params:", searchParams.toString(), "recipientId:", recipientId);
     useEffect(() => {
         const query = recipientId ? `?recipientId=${encodeURIComponent(recipientId)}` : "";
         api<BroadcastRatingContext>(`/broadcasts/${id}/ratings${query}`).then((result) => {
+            console.log("Broadcast rating context:", result);
             setContext(result);
             setBroadcastScore(result.broadcastRating?.score ?? 0);
             setUserScores(Object.fromEntries(result.ratings.filter((rating) => rating.ratedUserId).map((rating) => [rating.ratedUserId, rating.score])));

@@ -24,7 +24,13 @@ function roomParticipants(room: ChatRoom) {
 }
 
 function roomSortValue(room: ChatRoom) {
-    return new Date(room.lastMessageAt ?? "").getTime() || new Date((room as ChatRoom & { createdAt?: string }).createdAt ?? "").getTime() || 0;
+    return (
+        new Date(room.lastMessageAt ?? "").getTime() ||
+        new Date(
+            (room as ChatRoom & { createdAt?: string }).createdAt ?? ""
+        ).getTime() ||
+        0
+    );
 }
 
 function relativeMessageTime(value?: string) {
@@ -34,10 +40,7 @@ function relativeMessageTime(value?: string) {
         (Date.now() - new Date(value).getTime()) / 1000
     );
 
-    if (
-        !Number.isFinite(elapsedSeconds) ||
-        elapsedSeconds < 0
-    ) {
+    if (!Number.isFinite(elapsedSeconds) || elapsedSeconds < 0) {
         return "No messages yet";
     }
 
@@ -70,13 +73,14 @@ export function ChatWorkspace() {
     const [roomPage, setRoomPage] = useState(1);
     const [roomPages, setRoomPages] = useState(1);
     const [loadingRooms, setLoadingRooms] = useState(false);
+
     const roomSentinelRef = useRef<HTMLDivElement | null>(null);
+
     const [activeRoom, setActiveRoom] = useState<ChatRoom | null>(null);
     const [messages, setMessages] = useState<ChatMessage[]>([]);
     const [draft, setDraft] = useState("");
     const [error, setError] = useState("");
 
-    // Typing users currently typing in the active room
     const [typingUsers, setTypingUsers] = useState<
         { userId: string; name: string }[]
     >([]);
@@ -87,26 +91,74 @@ export function ChatWorkspace() {
 
     useEffect(() => {
         let cancelled = false;
+
         setLoadingRooms(true);
-        getList<ChatRoom>(`/chat/me/rooms?page=${roomPage}&limit=20`)
+
+        getList<ChatRoom>(
+            `/chat/me/rooms?page=${roomPage}&limit=20`
+        )
             .then((result) => {
                 if (cancelled) return;
-                setRooms((current) => roomPage === 1 ? result.data : [...current, ...result.data]);
+
+                setRooms((current) =>
+                    roomPage === 1
+                        ? result.data
+                        : [...current, ...result.data]
+                );
+
                 setRoomPages(Math.max(result.pages, 1));
-                if (roomPage === 1) setActiveRoom(result.data[0] ?? null);
+
+                if (roomPage === 1) {
+                    setActiveRoom(result.data[0] ?? null);
+                }
             })
-            .catch((reason: Error) => { if (!cancelled) setError(reason.message); })
-            .finally(() => { if (!cancelled) setLoadingRooms(false); });
-        return () => { cancelled = true; };
+            .catch((reason: Error) => {
+                if (!cancelled) {
+                    setError(reason.message);
+                }
+            })
+            .finally(() => {
+                if (!cancelled) {
+                    setLoadingRooms(false);
+                }
+            });
+
+        return () => {
+            cancelled = true;
+        };
     }, [roomPage]);
+
+    /* ========================================================
+       LOAD MORE ROOMS
+       ======================================================== */
 
     useEffect(() => {
         const sentinel = roomSentinelRef.current;
-        if (!sentinel || roomPage >= roomPages || loadingRooms) return;
-        const observer = new IntersectionObserver((entries) => {
-            if (entries[0]?.isIntersecting && !loadingRooms) setRoomPage((page) => Math.min(roomPages, page + 1));
-        }, { rootMargin: "160px" });
+
+        if (
+            !sentinel ||
+            roomPage >= roomPages ||
+            loadingRooms
+        ) {
+            return;
+        }
+
+        const observer = new IntersectionObserver(
+            (entries) => {
+                if (
+                    entries[0]?.isIntersecting &&
+                    !loadingRooms
+                ) {
+                    setRoomPage((page) =>
+                        Math.min(roomPages, page + 1)
+                    );
+                }
+            },
+            { rootMargin: "160px" }
+        );
+
         observer.observe(sentinel);
+
         return () => observer.disconnect();
     }, [roomPage, roomPages, loadingRooms]);
 
@@ -126,24 +178,37 @@ export function ChatWorkspace() {
             if (!detail?.roomId) return;
 
             setRooms((current) =>
-                current.map((room) =>
-                    room._id === detail.roomId
-                        ? {
-                            ...room,
-                            unreadCount:
-                                Number(room.unreadCount ?? 0) + 1,
-                            lastMessageAt:
-                                detail.timestamp ?? room.lastMessageAt,
-                        }
-                        : room,
-                    ).sort((left, right) => roomSortValue(right) - roomSortValue(left))
-                    );
+                current
+                    .map((room) =>
+                        room._id === detail.roomId
+                            ? {
+                                ...room,
+                                unreadCount:
+                                    Number(room.unreadCount ?? 0) + 1,
+                                lastMessageAt:
+                                    detail.timestamp ??
+                                    room.lastMessageAt,
+                            }
+                            : room
+                    )
+                    .sort(
+                        (left, right) =>
+                            roomSortValue(right) -
+                            roomSortValue(left)
+                    )
+            );
         }
 
-        window.addEventListener("comm-connect:chat-unread", onUnread);
+        window.addEventListener(
+            "comm-connect:chat-unread",
+            onUnread
+        );
 
         return () =>
-            window.removeEventListener("comm-connect:chat-unread", onUnread);
+            window.removeEventListener(
+                "comm-connect:chat-unread",
+                onUnread
+            );
     }, []);
 
     /* ========================================================
@@ -153,11 +218,10 @@ export function ChatWorkspace() {
     useEffect(() => {
         if (!activeRoom || !userId) return;
 
-        // Reset typing when switching rooms
         setTypingUsers([]);
 
         /*
-         * Always load existing messages.
+         * Load existing messages.
          */
         getList<ChatMessage>(
             `/chat/rooms/${activeRoom._id}/messages?limit=100`
@@ -170,7 +234,7 @@ export function ChatWorkspace() {
             });
 
         /*
-         * Disabled room → no socket
+         * Disabled room → no socket.
          */
         if (activeRoom.disabled) {
             socketRef.current?.disconnect();
@@ -179,7 +243,7 @@ export function ChatWorkspace() {
         }
 
         /*
-         * Mark as read
+         * Mark room as read.
          */
         api(`/chat/rooms/${activeRoom._id}/read`, {
             method: "PATCH",
@@ -188,17 +252,22 @@ export function ChatWorkspace() {
                 setRooms((current) =>
                     current.map((room) =>
                         room._id === activeRoom._id
-                            ? { ...room, unreadCount: 0 }
+                            ? {
+                                ...room,
+                                unreadCount: 0,
+                            }
                             : room
                     )
                 );
 
-                window.dispatchEvent(new Event("comm-connect:chat-read"));
+                window.dispatchEvent(
+                    new Event("comm-connect:chat-read")
+                );
             })
             .catch(() => undefined);
 
         /* ====================================================
-           SOCKET CONNECTION
+           SOCKET
            ==================================================== */
 
         const socket = io(`${SOCKET_URL}/ws`, {
@@ -226,7 +295,9 @@ export function ChatWorkspace() {
                 content: string;
                 timestamp: string;
             }) => {
-                if (message.roomId !== activeRoom._id) return;
+                if (message.roomId !== activeRoom._id) {
+                    return;
+                }
 
                 setMessages((current) => [
                     ...current,
@@ -244,24 +315,31 @@ export function ChatWorkspace() {
                         room._id === message.roomId
                             ? {
                                 ...room,
-                                lastMessageAt: message.timestamp,
+                                lastMessageAt:
+                                    message.timestamp,
                             }
                             : room
                     )
                 );
 
-                // Also clear typing for the sender (extra safety)
                 setTypingUsers((prev) =>
-                    prev.filter((u) => u.userId !== message.senderId)
+                    prev.filter(
+                        (u) => u.userId !== message.senderId
+                    )
                 );
 
                 if (message.senderId !== userId) {
-                    api(`/chat/rooms/${activeRoom._id}/read`, {
-                        method: "PATCH",
-                    })
+                    api(
+                        `/chat/rooms/${activeRoom._id}/read`,
+                        {
+                            method: "PATCH",
+                        }
+                    )
                         .then(() => {
                             window.dispatchEvent(
-                                new Event("comm-connect:chat-read")
+                                new Event(
+                                    "comm-connect:chat-read"
+                                )
                             );
                         })
                         .catch(() => undefined);
@@ -273,10 +351,6 @@ export function ChatWorkspace() {
            TYPING INDICATOR
            ==================================================== */
 
-        /* ====================================================
-            TYPING INDICATOR   ← REPLACE YOUR CURRENT ONE WITH THIS
-            ==================================================== */
-
         socket.on(
             "chat:user_typing",
             (data: {
@@ -285,17 +359,8 @@ export function ChatWorkspace() {
                 name: string;
                 isTyping: boolean;
             }) => {
-                console.log("%c===== TYPING EVENT =====", "color: lime; font-weight: bold");
-                console.log("Received data:", data);
-                console.log("My activeRoom._id:", activeRoom?._id);
-                console.log("My userId:", userId);
-                console.log(
-                    "Will ignore?",
-                    data.roomId !== activeRoom?._id || data.userId === userId
-                );
-
                 if (
-                    data.roomId !== activeRoom?._id ||
+                    data.roomId !== activeRoom._id ||
                     data.userId === userId
                 ) {
                     return;
@@ -303,15 +368,28 @@ export function ChatWorkspace() {
 
                 setTypingUsers((prev) => {
                     if (data.isTyping) {
-                        if (prev.some((u) => u.userId === data.userId)) {
+                        if (
+                            prev.some(
+                                (u) =>
+                                    u.userId === data.userId
+                            )
+                        ) {
                             return prev;
                         }
+
                         return [
                             ...prev,
-                            { userId: data.userId, name: data.name },
+                            {
+                                userId: data.userId,
+                                name: data.name,
+                            },
                         ];
                     }
-                    return prev.filter((u) => u.userId !== data.userId);
+
+                    return prev.filter(
+                        (u) =>
+                            u.userId !== data.userId
+                    );
                 });
             }
         );
@@ -320,18 +398,22 @@ export function ChatWorkspace() {
            SOCKET ERROR
            ==================================================== */
 
-        socket.on("error", (socketError: { message: string }) => {
-            setError(socketError.message);
-        });
+        socket.on(
+            "error",
+            (socketError: { message: string }) => {
+                setError(socketError.message);
+            }
+        );
 
         /* ====================================================
            CLEANUP
            ==================================================== */
 
         return () => {
-            // Clear any pending typing timeout
             if (typingTimeoutRef.current) {
-                clearTimeout(typingTimeoutRef.current);
+                clearTimeout(
+                    typingTimeoutRef.current
+                );
             }
 
             socket.emit("chat:leave_room", {
@@ -341,6 +423,7 @@ export function ChatWorkspace() {
 
             socket.disconnect();
             socketRef.current = null;
+
             setTypingUsers([]);
         };
     }, [activeRoom, userId]);
@@ -369,17 +452,17 @@ export function ChatWorkspace() {
     function handleDraftChange(value: string) {
         setDraft(value);
 
-        // Tell others we are typing
         emitTyping(true);
 
-        // Reset the "stop typing" timer
         if (typingTimeoutRef.current) {
-            clearTimeout(typingTimeoutRef.current);
+            clearTimeout(
+                typingTimeoutRef.current
+            );
         }
 
         typingTimeoutRef.current = setTimeout(() => {
             emitTyping(false);
-        }, 1500); // 1.5 seconds of inactivity
+        }, 1500);
     }
 
     /* ========================================================
@@ -398,17 +481,22 @@ export function ChatWorkspace() {
             return;
         }
 
-        // Stop typing immediately when sending
         if (typingTimeoutRef.current) {
-            clearTimeout(typingTimeoutRef.current);
+            clearTimeout(
+                typingTimeoutRef.current
+            );
         }
+
         emitTyping(false);
 
-        socketRef.current?.emit("chat:send_message", {
-            roomId: activeRoom._id,
-            userId,
-            content: draft.trim(),
-        });
+        socketRef.current?.emit(
+            "chat:send_message",
+            {
+                roomId: activeRoom._id,
+                userId,
+                content: draft.trim(),
+            }
+        );
 
         setDraft("");
     }
@@ -420,10 +508,13 @@ export function ChatWorkspace() {
     if (!rooms.length && !error) {
         return (
             <EmptyState
-                icon={<MessageCircle className="size-5" />}
+                icon={
+                    <MessageCircle className="size-5" />
+                }
                 title="No conversations yet"
             >
-                Accept a broadcast invitation to join its group chat.
+                Accept a broadcast invitation to join its
+                group chat.
             </EmptyState>
         );
     }
@@ -433,72 +524,154 @@ export function ChatWorkspace() {
        ======================================================== */
 
     return (
-        <div className="grid min-h-[32rem] overflow-hidden rounded-lg border border-border bg-surface shadow-sm md:grid-cols-[17rem_1fr]">
+        <div
+            className="
+                grid
+                min-h-[calc(100vh-12rem)]
+                overflow-hidden
+                rounded-lg
+                border
+                border-border
+                bg-surface
+                shadow-sm
+
+                md:grid-cols-[18rem_minmax(0,1fr)]
+            "
+        >
             {/* ==================================================
                 ROOM LIST
             ================================================== */}
 
-            <aside className="max-h-[32rem] overflow-y-auto border-b border-border md:border-r md:border-b-0">
-                <div className="border-b border-border px-4 py-3 text-sm font-semibold text-ink">
+            <aside
+                className="
+                    flex
+                    min-h-0
+                    flex-col
+                    overflow-hidden
+                    border-b
+                    border-border
+                    md:border-b-0
+                    md:border-r
+                "
+            >
+                <div className="shrink-0 border-b border-border px-4 py-3 text-sm font-semibold text-ink">
                     Conversations
                 </div>
 
-                {rooms.map((room) => (
-                    <button
-                        key={room._id}
-                        onClick={() => setActiveRoom(room)}
-                        className={`block w-full border-b border-border px-4 py-3 text-left transition-colors ${activeRoom?._id === room._id
-                            ? "bg-accent-subtle text-accent"
-                            : "text-ink hover:bg-surface-muted"
-                            }`}
-                    >
-                        <span className="flex items-start gap-2">
-                            {typeof room.broadcastId === "object" && room.broadcastId?.coverImageUrl ? <img src={room.broadcastId.coverImageUrl} alt="Broadcast" className="size-9 shrink-0 rounded-md object-contain object-top" /> : <span className="grid size-9 shrink-0 place-items-center rounded-md bg-accent-subtle text-accent"><MessageCircle className="size-4" /></span>}
-                            <span className="flex min-w-0 flex-1 items-start justify-between gap-2">
-                                <strong className="min-w-0 truncate text-sm">
-                                    {roomTitle(room)}
-                                </strong>
+                <div className="min-h-0 flex-1 overflow-y-auto">
+                    {rooms.map((room) => (
+                        <button
+                            key={room._id}
+                            onClick={() =>
+                                setActiveRoom(room)
+                            }
+                            className={`
+                                block
+                                w-full
+                                border-b
+                                border-border
+                                px-4
+                                py-3
+                                text-left
+                                transition-colors
 
-                                {room.disabled && (
-                                    <span className="shrink-0 rounded-full bg-surface-muted px-2 py-0.5 text-[10px] font-medium text-ink-muted">
-                                        Expired
+                                ${activeRoom?._id ===
+                                    room._id
+                                    ? "bg-accent-subtle text-accent"
+                                    : "text-ink hover:bg-surface-muted"
+                                }
+                            `}
+                        >
+                            <span className="flex items-start gap-2">
+                                {typeof room.broadcastId ===
+                                    "object" &&
+                                    room.broadcastId
+                                        ?.coverImageUrl ? (
+                                    <img
+                                        src={
+                                            room.broadcastId
+                                                .coverImageUrl
+                                        }
+                                        alt="Broadcast"
+                                        className="size-9 shrink-0 rounded-md object-contain object-top"
+                                    />
+                                ) : (
+                                    <span className="grid size-9 shrink-0 place-items-center rounded-md bg-accent-subtle text-accent">
+                                        <MessageCircle className="size-4" />
                                     </span>
                                 )}
 
-                                {!room.disabled &&
-                                    (room.unreadCount ?? 0) > 0 && (
-                                        <span className="grid min-w-5 place-items-center rounded-full bg-accent px-1 text-xs font-semibold text-surface">
-                                            {room.unreadCount! > 99
-                                                ? "99+"
-                                                : room.unreadCount}
-                                        </span>
-                                    )}
+                                <span className="flex min-w-0 flex-1 items-start justify-between gap-2">
+                                    <strong className="min-w-0 truncate text-sm">
+                                        {roomTitle(room)}
+                                    </strong>
+
+                                    <span className="flex shrink-0 items-center gap-1.5">
+                                        {room.disabled && (
+                                            <span className="rounded-full bg-surface-muted px-2 py-0.5 text-[10px] font-medium text-ink-muted">
+                                                Expired
+                                            </span>
+                                        )}
+
+                                        {!room.disabled &&
+                                            (room.unreadCount ??
+                                                0) >
+                                            0 && (
+                                                <span className="grid min-w-5 place-items-center rounded-full bg-accent px-1 text-xs font-semibold text-surface">
+                                                    {room.unreadCount! >
+                                                        99
+                                                        ? "99+"
+                                                        : room.unreadCount}
+                                                </span>
+                                            )}
+                                    </span>
+                                </span>
                             </span>
-                        </span>
 
-                        <span className="mt-1 block truncate text-xs text-ink-muted">
-                            {roomParticipants(room)}
-                        </span>
+                            <span className="mt-1 block truncate text-xs text-ink-muted">
+                                {roomParticipants(room)}
+                            </span>
 
-                        <span className="mt-1 block text-xs text-ink-muted">
-                            {relativeMessageTime(room.lastMessageAt)}
-                        </span>
-                    </button>
-                ))}
-                <div ref={roomSentinelRef} className="h-2" aria-hidden="true" />
-                {loadingRooms && <p className="px-4 py-3 text-xs text-ink-muted">Loading more conversations...</p>}
+                            <span className="mt-1 block text-xs text-ink-muted">
+                                {relativeMessageTime(
+                                    room.lastMessageAt
+                                )}
+                            </span>
+                        </button>
+                    ))}
+
+                    <div
+                        ref={roomSentinelRef}
+                        className="h-2"
+                        aria-hidden="true"
+                    />
+
+                    {loadingRooms && (
+                        <p className="px-4 py-3 text-xs text-ink-muted">
+                            Loading more conversations...
+                        </p>
+                    )}
+                </div>
             </aside>
 
             {/* ==================================================
                 CHAT
             ================================================== */}
 
-            <section className="flex min-h-[24rem] flex-col">
+            <section
+                className="
+                    flex
+                    min-h-0
+                    min-w-0
+                    flex-col
+                    overflow-hidden
+                "
+            >
                 {/* ==================================================
-                    HEADER
+                    CHAT HEADER
                 ================================================== */}
 
-                <div className="border-b border-border px-5 py-3">
+                <div className="shrink-0 border-b border-border px-5 py-3">
                     <div className="flex items-center justify-between gap-3">
                         <div className="min-w-0">
                             <strong className="block truncate text-sm text-ink">
@@ -509,7 +682,9 @@ export function ChatWorkspace() {
 
                             {activeRoom && (
                                 <span className="mt-1 block truncate text-xs text-ink-muted">
-                                    {roomParticipants(activeRoom)}
+                                    {roomParticipants(
+                                        activeRoom
+                                    )}
                                 </span>
                             )}
                         </div>
@@ -526,57 +701,102 @@ export function ChatWorkspace() {
                     MESSAGES
                 ================================================== */}
 
-                <div className="flex-1 space-y-3 overflow-y-auto p-5">
-                    {messages.length === 0 && activeRoom && (
-                        <div className="flex h-full items-center justify-center text-sm text-ink-muted">
-                            No messages yet.
-                        </div>
-                    )}
+                <div
+                    className="
+                        min-h-0
+                        flex-1
+                        overflow-y-auto
+                        p-5
+                    "
+                >
+                    <div className="space-y-3">
+                        {messages.length === 0 &&
+                            activeRoom && (
+                                <div className="flex min-h-[20rem] items-center justify-center text-sm text-ink-muted">
+                                    No messages yet.
+                                </div>
+                            )}
 
-                    {messages.map((message) => (
-                        <div
-                            key={message._id}
-                            className={`max-w-[80%] ${message.senderId === userId ? "ml-auto" : ""
-                                }`}
-                        >
+                        {messages.map((message) => (
                             <div
-                                className={`rounded-md px-3 py-2 text-sm leading-6 ${message.senderId === userId
-                                    ? "bg-accent text-surface"
-                                    : "bg-surface-muted text-ink"
-                                    }`}
-                            >
-                                <>
-                                    <span className="mb-1 block text-xs font-semibold opacity-80">{message.senderId === userId ? "You" : message.senderName ?? "Community member"}</span>
-                                    <span>{message.content}</span>
-                                </>
-                            </div>
-
-                            <p className="mt-1 text-xs text-ink-muted">
-                                {new Date(message.createdAt).toLocaleTimeString(
-                                    [],
-                                    {
-                                        hour: "numeric",
-                                        minute: "2-digit",
+                                key={message._id}
+                                className={`
+                                    max-w-[80%]
+                                    ${message.senderId ===
+                                        userId
+                                        ? "ml-auto"
+                                        : ""
                                     }
-                                )}
+                                `}
+                            >
+                                <div
+                                    className={`
+                                        rounded-md
+                                        px-3
+                                        py-2
+                                        text-sm
+                                        leading-6
+                                        ${message.senderId === userId
+                                            ? "bg-accent text-surface"
+                                            : "bg-accent-subtle text-ink"
+                                        }
+                                    `}
+                                >
+                                    <span className="mb-1 block text-xs font-semibold opacity-80">
+                                        {message.senderId ===
+                                            userId
+                                            ? "You"
+                                            : message.senderName ??
+                                            "Community member"}
+                                    </span>
+
+                                    <span className="whitespace-pre-wrap break-words">
+                                        {message.content}
+                                    </span>
+                                </div>
+
+                                <p className="mt-1 text-xs text-ink-muted">
+                                    {new Date(
+                                        message.createdAt
+                                    ).toLocaleTimeString(
+                                        [],
+                                        {
+                                            hour: "numeric",
+                                            minute: "2-digit",
+                                        }
+                                    )}
+                                </p>
+                            </div>
+                        ))}
+
+                        {/* ==================================================
+                            TYPING INDICATOR
+                        ================================================== */}
+
+                        {typingUsers.length > 0 && (
+                            <div className="px-1 text-sm italic text-ink-muted">
+                                {typingUsers
+                                    .map((u) => u.name)
+                                    .join(", ")}{" "}
+                                {typingUsers.length === 1
+                                    ? "is"
+                                    : "are"}{" "}
+                                typing
+                                <span className="animate-pulse">
+                                    ...
+                                </span>
+                            </div>
+                        )}
+
+                        {error && (
+                            <p
+                                role="alert"
+                                className="text-sm text-danger"
+                            >
+                                {error}
                             </p>
-                        </div>
-                    ))}
-
-                    {/* ========== TYPING INDICATOR ========== */}
-                    {typingUsers.length > 0 && (
-                        <div className="px-1 text-sm italic text-ink-muted">
-                            {typingUsers.map((u) => u.name).join(", ")}{" "}
-                            {typingUsers.length === 1 ? "is" : "are"} typing
-                            <span className="animate-pulse">...</span>
-                        </div>
-                    )}
-
-                    {error && (
-                        <p role="alert" className="text-sm text-danger">
-                            {error}
-                        </p>
-                    )}
+                        )}
+                    </div>
                 </div>
 
                 {/* ==================================================
@@ -584,38 +804,59 @@ export function ChatWorkspace() {
                 ================================================== */}
 
                 {activeRoom?.disabled ? (
-                    <div className="border-t border-border bg-surface-muted px-4 py-4 text-center">
+                    <div className="shrink-0 border-t border-border bg-surface-muted px-4 py-4 text-center">
                         <p className="text-sm font-medium text-ink">
                             This chat has expired
                         </p>
+
                         <p className="mt-1 text-xs text-ink-muted">
-                            This broadcast has ended. You can still view the
-                            previous messages, but no new messages can be sent.
+                            This broadcast has ended. You can
+                            still view the previous messages,
+                            but no new messages can be sent.
                         </p>
                     </div>
                 ) : (
                     /* ==================================================
                        MESSAGE INPUT
-                       ================================================== */
+                    ================================================== */
 
                     <form
                         onSubmit={send}
-                        className="flex gap-2 border-t border-border p-3"
+                        className="flex shrink-0 gap-2 border-t border-border p-3"
                     >
                         <input
                             value={draft}
                             onChange={(event) =>
-                                handleDraftChange(event.target.value)
+                                handleDraftChange(
+                                    event.target.value
+                                )
                             }
-                            disabled={!activeRoom || activeRoom.disabled}
+                            disabled={
+                                !activeRoom ||
+                                activeRoom.disabled
+                            }
                             maxLength={2000}
                             placeholder="Write a message"
-                            className="h-11 min-w-0 flex-1 rounded-md border border-border px-3 text-sm outline-none focus:border-accent disabled:cursor-not-allowed disabled:bg-surface-muted disabled:text-ink-muted"
+                            className="
+                                h-11
+                                min-w-0
+                                flex-1
+                                rounded-md
+                                border
+                                border-border
+                                px-3
+                                text-sm
+                                outline-none
+                                focus:border-accent
+                                disabled:cursor-not-allowed
+                                disabled:bg-surface-muted
+                                disabled:text-ink-muted
+                            "
                         />
 
                         <Button
                             type="submit"
-                            className="w-11 px-0"
+                            className="w-11 shrink-0 px-0"
                             disabled={
                                 !activeRoom ||
                                 activeRoom.disabled ||
@@ -623,7 +864,9 @@ export function ChatWorkspace() {
                             }
                         >
                             <Send className="size-4" />
-                            <span className="sr-only">Send message</span>
+                            <span className="sr-only">
+                                Send message
+                            </span>
                         </Button>
                     </form>
                 )}
@@ -637,28 +880,22 @@ export function ChatWorkspace() {
    ============================================================ */
 
 export function NotificationWorkspace() {
-    const userId =
-        getSession()?.user?._id;
+    const userId = getSession()?.user?._id;
 
     const [notifications, setNotifications] =
         useState<Notification[]>([]);
 
-    const [error, setError] =
-        useState("");
+    const [error, setError] = useState("");
 
     useEffect(() => {
         getList<Notification>(
             "/notifications?limit=50"
         )
             .then((result) =>
-                setNotifications(
-                    result.data
-                )
+                setNotifications(result.data)
             )
             .catch((reason: Error) =>
-                setError(
-                    reason.message
-                )
+                setError(reason.message)
             );
 
         if (!userId) return;
@@ -681,32 +918,21 @@ export function NotificationWorkspace() {
 
         socket.on(
             "notification:new",
-            (
-                event: {
-                    type: string;
-                    data: Record<
-                        string,
-                        unknown
-                    >;
-                    timestamp: string;
-                }
-            ) =>
-                setNotifications(
-                    (current) => [
-                        {
-                            _id:
-                                crypto.randomUUID(),
-                            type:
-                                event.type,
-                            data:
-                                event.data,
-                            read: false,
-                            createdAt:
-                                event.timestamp,
-                        },
-                        ...current,
-                    ]
-                )
+            (event: {
+                type: string;
+                data: Record<string, unknown>;
+                timestamp: string;
+            }) =>
+                setNotifications((current) => [
+                    {
+                        _id: crypto.randomUUID(),
+                        type: event.type,
+                        data: event.data,
+                        read: false,
+                        createdAt: event.timestamp,
+                    },
+                    ...current,
+                ])
         );
 
         return () => {
@@ -714,9 +940,7 @@ export function NotificationWorkspace() {
         };
     }, [userId]);
 
-    async function markRead(
-        id: string
-    ) {
+    async function markRead(id: string) {
         try {
             await api(
                 `/notifications/${id}/read`,
@@ -725,20 +949,21 @@ export function NotificationWorkspace() {
                 }
             );
 
-            setNotifications(
-                (current) =>
-                    current.map(
-                        (
-                            notification
-                        ) =>
-                            notification._id ===
-                                id
-                                ? {
-                                    ...notification,
-                                    read: true,
-                                }
-                                : notification
-                    )
+            setNotifications((current) =>
+                current.map((notification) =>
+                    notification._id === id
+                        ? {
+                            ...notification,
+                            read: true,
+                        }
+                        : notification
+                )
+            );
+
+            window.dispatchEvent(
+                new Event(
+                    "comm-connect:notification-read"
+                )
             );
         } catch (reason) {
             setError(
@@ -758,16 +983,19 @@ export function NotificationWorkspace() {
                 }
             );
 
-            setNotifications(
-                (current) =>
-                    current.map(
-                        (
-                            notification
-                        ) => ({
-                            ...notification,
-                            read: true,
-                        })
-                    )
+            setNotifications((current) =>
+                current.map(
+                    (notification) => ({
+                        ...notification,
+                        read: true,
+                    })
+                )
+            );
+
+            window.dispatchEvent(
+                new Event(
+                    "comm-connect:notification-read"
+                )
             );
         } catch (reason) {
             setError(
@@ -778,10 +1006,7 @@ export function NotificationWorkspace() {
         }
     }
 
-    if (
-        !notifications.length &&
-        !error
-    ) {
+    if (!notifications.length && !error) {
         return (
             <EmptyState
                 icon={
@@ -797,7 +1022,6 @@ export function NotificationWorkspace() {
 
     return (
         <div>
-
             {error && (
                 <p
                     role="alert"
@@ -817,29 +1041,42 @@ export function NotificationWorkspace() {
             </div>
 
             <div className="border border-border bg-surface">
-
                 {notifications.map(
                     (notification) => (
                         <button
-                            key={
-                                notification._id
-                            }
+                            key={notification._id}
                             onClick={() =>
                                 !notification.read &&
                                 markRead(
                                     notification._id
                                 )
                             }
-                            className={`flex w-full gap-4 border-b border-border p-5 text-left last:border-0 ${notification.read
-                                ? "text-ink-muted"
-                                : "bg-accent-subtle/40 text-ink"
-                                }`}
+                            className={`
+                                flex
+                                w-full
+                                gap-4
+                                border-b
+                                border-border
+                                p-5
+                                text-left
+                                last:border-0
+                                ${notification.read
+                                    ? "text-ink-muted"
+                                    : "bg-accent-subtle/40 text-ink"
+                                }
+                            `}
                         >
                             <span
-                                className={`mt-1 size-2 shrink-0 rounded-full ${notification.read
-                                    ? "bg-border"
-                                    : "bg-accent"
-                                    }`}
+                                className={`
+                                    mt-1
+                                    size-2
+                                    shrink-0
+                                    rounded-full
+                                    ${notification.read
+                                        ? "bg-border"
+                                        : "bg-accent"
+                                    }
+                                `}
                             />
 
                             <span>
@@ -855,15 +1092,11 @@ export function NotificationWorkspace() {
                                         notification.data
                                     )
                                         .filter(
-                                            (
-                                                value
-                                            ) =>
+                                            (value) =>
                                                 typeof value ===
                                                 "string"
                                         )
-                                        .join(
-                                            " · "
-                                        ) ||
+                                        .join(" · ") ||
                                         "There is new activity in your community."}
                                 </span>
 
@@ -876,7 +1109,6 @@ export function NotificationWorkspace() {
                         </button>
                     )
                 )}
-
             </div>
         </div>
     );

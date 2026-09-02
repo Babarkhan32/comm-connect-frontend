@@ -471,8 +471,7 @@ export function BroadcastDetailWorkspace() {
                                             </span>
                                         </span>
                                     </Link>
-                                    {isOwner && participant.status === "APPLIED" && <div className="flex gap-2"><button type="button" disabled={!!busy} onClick={() => void reviewApplication(person._id, "accept")} className="border border-success px-3 py-1.5 text-xs font-semibold text-success">Accept request</button><button type="button" disabled={!!busy} onClick={() => void reviewApplication(person._id, "reject")} className="border border-danger px-3 py-1.5 text-xs font-semibold text-danger">Reject</button></div>}
-                                    {(canRateParticipant || (isOwner && participant.status !== "APPLIED")) && (
+                                    {(canRateParticipant || (isOwner && (participant.status === "ACCEPTED" || participant.status === "PENDING"))) && (
                                         <div className="flex gap-2">
                                             {canRateParticipant && (
                                                 <button
@@ -484,17 +483,23 @@ export function BroadcastDetailWorkspace() {
                                                     <Star className="size-4" />
                                                 </button>
                                             )}
-                                            {isOwner && (participant.status === "ACCEPTED" || participant.status === "PENDING") && (
-                                                <button
-                                                    type="button"
-                                                    title={participant.status === "PENDING" ? "Remove invitation" : "Remove participant"}
-                                                    disabled={!!busy}
-                                                    onClick={() => void exclude(person._id)}
-                                                    className="inline-flex size-9 items-center justify-center border border-border text-danger hover:border-danger"
-                                                >
-                                                    <Ban className="size-4" />
-                                                </button>
-                                            )}
+                                            {isOwner &&
+                                                (participant.status === "ACCEPTED" || participant.status === "PENDING") &&
+                                                new Date(broadcast.eventDate).getTime() > Date.now() && (
+                                                    <button
+                                                        type="button"
+                                                        title={
+                                                            participant.status === "PENDING"
+                                                                ? "Remove invitation"
+                                                                : "Remove participant"
+                                                        }
+                                                        disabled={!!busy}
+                                                        onClick={() => void exclude(person._id)}
+                                                        className="inline-flex size-9 items-center justify-center border border-border text-danger hover:border-danger"
+                                                    >
+                                                        <Ban className="size-4" />
+                                                    </button>
+                                                )}
                                         </div>
                                     )}
                                 </div>

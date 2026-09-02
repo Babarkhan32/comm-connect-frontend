@@ -3,32 +3,70 @@
 :root {
   color-scheme: light;
 
-  /* Core surfaces */
-  --canvas: #fbfaf8;
+  /* =========================================================
+     SURFACES
+     ========================================================= */
+
+  --canvas: #ffffff;
   --surface: #ffffff;
-  --surface-muted: #f1f3f5;
+  --surface-muted: #fff5f0;
+  --surface-warm: #fffaf7;
 
-  /* Text */
-  --ink: #202b3c;
-  --ink-muted: #687386;
+  /* =========================================================
+     TEXT
+     ========================================================= */
 
-  /* Borders */
-  --border: #dfe3e8;
+  --ink: #182235;
+  --ink-muted: #3f4b5f;
+  --ink-soft: #697587;
 
-  /* Brand */
+  /* =========================================================
+     BORDERS
+     ========================================================= */
+
+  --border: #eee5df;
+  --border-strong: #e5d8d0;
+
+  /* =========================================================
+     BRAND
+     ========================================================= */
+
   --accent: #e4572e;
-  --accent-hover: #c84420;
-  --accent-subtle: #ffebe3;
+  --accent-hover: #c94420;
 
-  /* Semantic */
-  --success: #2f7d6b;
-  --warning: #a86b1f;
-  --danger: #b33d4b;
+  --accent-subtle: #ffe2d7;
+  --accent-light: #fff0eb;
 
-  /* Accessibility */
-  --focus-ring: #eb8b6e;
+  /* =========================================================
+     HIGHLIGHT
+     ========================================================= */
 
-  /* Tailwind aliases */
+  --highlight: #f5b83d;
+  --highlight-subtle: #fff4d7;
+
+  /* =========================================================
+     SEMANTIC
+     ========================================================= */
+
+  --success: #26806c;
+  --success-subtle: #e5f5f0;
+
+  --warning: #b66b16;
+  --warning-subtle: #fff1d8;
+
+  --danger: #c33f4e;
+  --danger-subtle: #fde8eb;
+
+  /* =========================================================
+     ACCESSIBILITY
+     ========================================================= */
+
+  --focus-ring: #f08a68;
+
+  /* =========================================================
+     TAILWIND ALIASES
+     ========================================================= */
+
   --background: var(--canvas);
   --foreground: var(--ink);
 }
@@ -38,32 +76,67 @@
   --color-foreground: var(--foreground);
 
   --color-canvas: var(--canvas);
+
   --color-surface: var(--surface);
   --color-surface-muted: var(--surface-muted);
+  --color-surface-warm: var(--surface-warm);
 
   --color-ink: var(--ink);
   --color-ink-muted: var(--ink-muted);
+  --color-ink-soft: var(--ink-soft);
 
   --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
 
   --color-accent: var(--accent);
   --color-accent-hover: var(--accent-hover);
   --color-accent-subtle: var(--accent-subtle);
+  --color-accent-light: var(--accent-light);
+
+  --color-highlight: var(--highlight);
+  --color-highlight-subtle: var(--highlight-subtle);
 
   --color-success: var(--success);
+  --color-success-subtle: var(--success-subtle);
+
   --color-warning: var(--warning);
+  --color-warning-subtle: var(--warning-subtle);
+
   --color-danger: var(--danger);
+  --color-danger-subtle: var(--danger-subtle);
 
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-geist-sans), sans-serif;
-  overflow-x: hidden;
+/* =========================================================
+   BASE
+   ========================================================= */
+
+html {
+  background: #ffffff;
 }
+
+body {
+  background:
+    radial-gradient(circle at 0% 0%,
+      rgba(228, 87, 46, 0.035),
+      transparent 30rem),
+    #ffffff;
+
+  color: var(--foreground);
+
+  font-family: var(--font-geist-sans), sans-serif;
+
+  overflow-x: hidden;
+
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* =========================================================
+   MEDIA
+   ========================================================= */
 
 img,
 video {
@@ -76,15 +149,9 @@ select {
   max-width: 100%;
 }
 
-::selection {
-  background: var(--accent-subtle);
-  color: var(--ink);
-}
-
-:focus-visible {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: 3px;
-}
+/* =========================================================
+   FORM ELEMENTS
+   ========================================================= */
 
 button,
 input,
@@ -92,6 +159,28 @@ textarea,
 select {
   font: inherit;
 }
+
+/* =========================================================
+   SELECTION
+   ========================================================= */
+
+::selection {
+  background: var(--accent-subtle);
+  color: var(--ink);
+}
+
+/* =========================================================
+   FOCUS
+   ========================================================= */
+
+:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 3px;
+}
+
+/* =========================================================
+   PAGE ANIMATION
+   ========================================================= */
 
 @keyframes page-enter {
   from {
@@ -109,11 +198,45 @@ select {
   animation: page-enter 360ms ease-out both;
 }
 
+/* =========================================================
+   APP HEADINGS
+   ========================================================= */
+
 .app-heading::before {
   content: "";
+
   display: block;
-  width: 2.25rem;
-  height: 0.25rem;
-  margin-bottom: 0.85rem;
+
+  width: 2.5rem;
+  height: 0.3rem;
+
+  margin-bottom: 0.8rem;
+
   background: var(--accent);
+
+  border-radius: 9999px;
+}
+
+/* =========================================================
+   SURFACE HELPERS
+   ========================================================= */
+
+.accent-surface {
+  background: var(--accent-light);
+}
+
+.highlight-surface {
+  background: var(--highlight-subtle);
+}
+
+.success-surface {
+  background: var(--success-subtle);
+}
+
+.warning-surface {
+  background: var(--warning-subtle);
+}
+
+.danger-surface {
+  background: var(--danger-subtle);
 }
